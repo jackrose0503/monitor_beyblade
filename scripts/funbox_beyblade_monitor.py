@@ -582,7 +582,10 @@ def _parse_stock_status(text: str) -> StockStatus:
         return "unknown"
     if any(keyword in text for keyword in ("尚有庫存", "可購買", "現貨供應")):
         return "in_stock"
-    if any(keyword in text for keyword in ("已售完", "補貨中", "缺貨", "暫無庫存")):
+    if any(
+        keyword in text
+        for keyword in ("已售完", "補貨中", "缺貨", "暫無庫存", "庫存不足", "售完待補貨")
+    ):
         return "sold_out"
     return "unknown"
 

@@ -41,6 +41,19 @@ DETAIL_HTML_SOLD_OUT = """
 """
 
 
+DETAIL_HTML_LOW_STOCK_BLOCKED = """
+<html>
+  <body>
+    <h1>BEYBLADE X 戰鬥陀螺 CX-14 騎士堡壘</h1>
+    <div>NT$495</div>
+    <div>商品編號: BB09726</div>
+    <div>線上庫存: 庫存不足 門市庫存狀態查詢</div>
+    <button>售完待補貨</button>
+  </body>
+</html>
+"""
+
+
 def make_snapshot(
     *,
     url: str = "https://shop.funbox.com.tw/products/bb93952",
@@ -78,6 +91,13 @@ class ParsingAndDiffTests(unittest.TestCase):
 
         self.assertEqual(detail.product_code, "BB93953")
         self.assertEqual(detail.price_twd, 1999)
+        self.assertEqual(detail.stock_status, "sold_out")
+
+    def test_parse_product_detail_marks_low_stock_blocked_as_sold_out(self) -> None:
+        detail = parse_product_detail(DETAIL_HTML_LOW_STOCK_BLOCKED)
+
+        self.assertEqual(detail.product_code, "BB09726")
+        self.assertEqual(detail.price_twd, 495)
         self.assertEqual(detail.stock_status, "sold_out")
 
     def test_diff_products_reports_new_listing_and_restock_only(self) -> None:
