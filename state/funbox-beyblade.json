@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-04-13T15:39:26.209058+00:00",
+  "checked_at": "2026-04-13T16:08:13.002049+00:00",
   "products": [
     {
       "product_url": "https://shop.funbox.com.tw/products/bbpr95431",
@@ -9,7 +9,7 @@
       "price_twd": 999999,
       "stock_status": "in_stock",
       "first_seen_at": "2026-04-13T05:12:25.739733+00:00",
-      "last_seen_at": "2026-04-13T15:39:26.209058+00:00",
+      "last_seen_at": "2026-04-13T16:08:13.002049+00:00",
       "store_inventory": {
         "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "UNKNOWN",
         "AD331南紡購物中心(Funbox Toys)": "UNKNOWN",
@@ -27,13 +27,13 @@
       "price_twd": 495,
       "stock_status": "in_stock",
       "first_seen_at": "2026-04-13T05:12:25.739733+00:00",
-      "last_seen_at": "2026-04-13T15:39:26.209058+00:00",
+      "last_seen_at": "2026-04-13T16:08:13.002049+00:00",
       "store_inventory": {
-        "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "UNKNOWN",
-        "AD331南紡購物中心(Funbox Toys)": "UNKNOWN",
-        "AD351台南三井(Funbox Toys)": "UNKNOWN",
-        "AD311台南三越(Funbox Toys)": "UNKNOWN",
-        "AD316台南遠百(Funbox Toys)": "UNKNOWN",
+        "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "FALSE",
+        "AD331南紡購物中心(Funbox Toys)": "FALSE",
+        "AD351台南三井(Funbox Toys)": "FALSE",
+        "AD311台南三越(Funbox Toys)": "FALSE",
+        "AD316台南遠百(Funbox Toys)": "FALSE",
         "其他": "TRUE"
       }
     },
@@ -45,13 +45,13 @@
       "price_twd": 495,
       "stock_status": "sold_out",
       "first_seen_at": "2026-04-13T05:12:25.739733+00:00",
-      "last_seen_at": "2026-04-13T15:39:26.209058+00:00",
+      "last_seen_at": "2026-04-13T16:08:13.002049+00:00",
       "store_inventory": {
-        "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "UNKNOWN",
-        "AD331南紡購物中心(Funbox Toys)": "UNKNOWN",
-        "AD351台南三井(Funbox Toys)": "UNKNOWN",
-        "AD311台南三越(Funbox Toys)": "UNKNOWN",
-        "AD316台南遠百(Funbox Toys)": "UNKNOWN",
+        "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "FALSE",
+        "AD331南紡購物中心(Funbox Toys)": "FALSE",
+        "AD351台南三井(Funbox Toys)": "FALSE",
+        "AD311台南三越(Funbox Toys)": "FALSE",
+        "AD316台南遠百(Funbox Toys)": "FALSE",
         "其他": "TRUE"
       }
     },
@@ -63,13 +63,13 @@
       "price_twd": 350,
       "stock_status": "sold_out",
       "first_seen_at": "2026-04-13T05:12:25.739733+00:00",
-      "last_seen_at": "2026-04-13T15:39:26.209058+00:00",
+      "last_seen_at": "2026-04-13T16:08:13.002049+00:00",
       "store_inventory": {
-        "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "UNKNOWN",
-        "AD331南紡購物中心(Funbox Toys)": "UNKNOWN",
-        "AD351台南三井(Funbox Toys)": "UNKNOWN",
-        "AD311台南三越(Funbox Toys)": "UNKNOWN",
-        "AD316台南遠百(Funbox Toys)": "UNKNOWN",
+        "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "FALSE",
+        "AD331南紡購物中心(Funbox Toys)": "FALSE",
+        "AD351台南三井(Funbox Toys)": "FALSE",
+        "AD311台南三越(Funbox Toys)": "FALSE",
+        "AD316台南遠百(Funbox Toys)": "FALSE",
         "其他": "TRUE"
       }
     },
@@ -81,14 +81,14 @@
       "price_twd": 350,
       "stock_status": "sold_out",
       "first_seen_at": "2026-04-13T05:12:25.739733+00:00",
-      "last_seen_at": "2026-04-13T15:39:26.209058+00:00",
+      "last_seen_at": "2026-04-13T16:08:13.002049+00:00",
       "store_inventory": {
-        "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "UNKNOWN",
-        "AD331南紡購物中心(Funbox Toys)": "UNKNOWN",
-        "AD351台南三井(Funbox Toys)": "UNKNOWN",
-        "AD311台南三越(Funbox Toys)": "UNKNOWN",
-        "AD316台南遠百(Funbox Toys)": "UNKNOWN",
-        "其他": "TRUE"
+        "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "FALSE",
+        "AD331南紡購物中心(Funbox Toys)": "FALSE",
+        "AD351台南三井(Funbox Toys)": "FALSE",
+        "AD311台南三越(Funbox Toys)": "FALSE",
+        "AD316台南遠百(Funbox Toys)": "FALSE",
+        "其他": "FALSE"
       }
     },
     {
@@ -99,13 +99,13 @@
       "price_twd": 350,
       "stock_status": "in_stock",
       "first_seen_at": "2026-04-13T05:12:25.739733+00:00",
-      "last_seen_at": "2026-04-13T15:39:26.209058+00:00",
+      "last_seen_at": "2026-04-13T16:08:13.002049+00:00",
       "store_inventory": {
-        "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "UNKNOWN",
-        "AD331南紡購物中心(Funbox Toys)": "UNKNOWN",
-        "AD351台南三井(Funbox Toys)": "UNKNOWN",
-        "AD311台南三越(Funbox Toys)": "UNKNOWN",
-        "AD316台南遠百(Funbox Toys)": "UNKNOWN",
+        "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "TRUE",
+        "AD331南紡購物中心(Funbox Toys)": "FALSE",
+        "AD351台南三井(Funbox Toys)": "FALSE",
+        "AD311台南三越(Funbox Toys)": "FALSE",
+        "AD316台南遠百(Funbox Toys)": "FALSE",
         "其他": "TRUE"
       }
     },
@@ -117,13 +117,13 @@
       "price_twd": 995,
       "stock_status": "in_stock",
       "first_seen_at": "2026-04-13T05:12:25.739733+00:00",
-      "last_seen_at": "2026-04-13T15:39:26.209058+00:00",
+      "last_seen_at": "2026-04-13T16:08:13.002049+00:00",
       "store_inventory": {
-        "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "UNKNOWN",
-        "AD331南紡購物中心(Funbox Toys)": "UNKNOWN",
-        "AD351台南三井(Funbox Toys)": "UNKNOWN",
-        "AD311台南三越(Funbox Toys)": "UNKNOWN",
-        "AD316台南遠百(Funbox Toys)": "UNKNOWN",
+        "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "TRUE",
+        "AD331南紡購物中心(Funbox Toys)": "TRUE",
+        "AD351台南三井(Funbox Toys)": "FALSE",
+        "AD311台南三越(Funbox Toys)": "FALSE",
+        "AD316台南遠百(Funbox Toys)": "FALSE",
         "其他": "TRUE"
       }
     },
@@ -135,13 +135,13 @@
       "price_twd": 325,
       "stock_status": "sold_out",
       "first_seen_at": "2026-04-13T05:12:25.739733+00:00",
-      "last_seen_at": "2026-04-13T15:39:26.209058+00:00",
+      "last_seen_at": "2026-04-13T16:08:13.002049+00:00",
       "store_inventory": {
-        "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "UNKNOWN",
-        "AD331南紡購物中心(Funbox Toys)": "UNKNOWN",
-        "AD351台南三井(Funbox Toys)": "UNKNOWN",
-        "AD311台南三越(Funbox Toys)": "UNKNOWN",
-        "AD316台南遠百(Funbox Toys)": "UNKNOWN",
+        "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "FALSE",
+        "AD331南紡購物中心(Funbox Toys)": "FALSE",
+        "AD351台南三井(Funbox Toys)": "FALSE",
+        "AD311台南三越(Funbox Toys)": "FALSE",
+        "AD316台南遠百(Funbox Toys)": "TRUE",
         "其他": "TRUE"
       }
     },
@@ -153,13 +153,13 @@
       "price_twd": 799,
       "stock_status": "in_stock",
       "first_seen_at": "2026-04-13T05:12:25.739733+00:00",
-      "last_seen_at": "2026-04-13T15:39:26.209058+00:00",
+      "last_seen_at": "2026-04-13T16:08:13.002049+00:00",
       "store_inventory": {
-        "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "UNKNOWN",
-        "AD331南紡購物中心(Funbox Toys)": "UNKNOWN",
-        "AD351台南三井(Funbox Toys)": "UNKNOWN",
-        "AD311台南三越(Funbox Toys)": "UNKNOWN",
-        "AD316台南遠百(Funbox Toys)": "UNKNOWN",
+        "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "TRUE",
+        "AD331南紡購物中心(Funbox Toys)": "TRUE",
+        "AD351台南三井(Funbox Toys)": "FALSE",
+        "AD311台南三越(Funbox Toys)": "TRUE",
+        "AD316台南遠百(Funbox Toys)": "TRUE",
         "其他": "TRUE"
       }
     },
@@ -171,13 +171,13 @@
       "price_twd": 799,
       "stock_status": "in_stock",
       "first_seen_at": "2026-04-13T05:12:25.739733+00:00",
-      "last_seen_at": "2026-04-13T15:39:26.209058+00:00",
+      "last_seen_at": "2026-04-13T16:08:13.002049+00:00",
       "store_inventory": {
-        "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "UNKNOWN",
-        "AD331南紡購物中心(Funbox Toys)": "UNKNOWN",
-        "AD351台南三井(Funbox Toys)": "UNKNOWN",
-        "AD311台南三越(Funbox Toys)": "UNKNOWN",
-        "AD316台南遠百(Funbox Toys)": "UNKNOWN",
+        "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "TRUE",
+        "AD331南紡購物中心(Funbox Toys)": "FALSE",
+        "AD351台南三井(Funbox Toys)": "FALSE",
+        "AD311台南三越(Funbox Toys)": "TRUE",
+        "AD316台南遠百(Funbox Toys)": "TRUE",
         "其他": "TRUE"
       }
     },
@@ -189,13 +189,13 @@
       "price_twd": 799,
       "stock_status": "in_stock",
       "first_seen_at": "2026-04-13T05:12:25.739733+00:00",
-      "last_seen_at": "2026-04-13T15:39:26.209058+00:00",
+      "last_seen_at": "2026-04-13T16:08:13.002049+00:00",
       "store_inventory": {
-        "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "UNKNOWN",
-        "AD331南紡購物中心(Funbox Toys)": "UNKNOWN",
-        "AD351台南三井(Funbox Toys)": "UNKNOWN",
-        "AD311台南三越(Funbox Toys)": "UNKNOWN",
-        "AD316台南遠百(Funbox Toys)": "UNKNOWN",
+        "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "TRUE",
+        "AD331南紡購物中心(Funbox Toys)": "TRUE",
+        "AD351台南三井(Funbox Toys)": "TRUE",
+        "AD311台南三越(Funbox Toys)": "TRUE",
+        "AD316台南遠百(Funbox Toys)": "TRUE",
         "其他": "TRUE"
       }
     },
@@ -207,13 +207,13 @@
       "price_twd": 295,
       "stock_status": "sold_out",
       "first_seen_at": "2026-04-13T05:12:25.739733+00:00",
-      "last_seen_at": "2026-04-13T15:39:26.209058+00:00",
+      "last_seen_at": "2026-04-13T16:08:13.002049+00:00",
       "store_inventory": {
-        "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "UNKNOWN",
-        "AD331南紡購物中心(Funbox Toys)": "UNKNOWN",
-        "AD351台南三井(Funbox Toys)": "UNKNOWN",
-        "AD311台南三越(Funbox Toys)": "UNKNOWN",
-        "AD316台南遠百(Funbox Toys)": "UNKNOWN",
+        "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "FALSE",
+        "AD331南紡購物中心(Funbox Toys)": "FALSE",
+        "AD351台南三井(Funbox Toys)": "FALSE",
+        "AD311台南三越(Funbox Toys)": "FALSE",
+        "AD316台南遠百(Funbox Toys)": "FALSE",
         "其他": "FALSE"
       }
     }
