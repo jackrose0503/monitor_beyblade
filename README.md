@@ -26,6 +26,7 @@
 
 - 首次執行只建立 baseline，不發通知。
 - `workflow_dispatch` 可手動執行，並支援 `reset_baseline=true` 強制重建 baseline。
+- `workflow_dispatch` 也支援 `send_status_report=true`，手動回報 `categories/takaratomy/beyblade` 目前網站狀態到 Telegram 與 Email。
 - 只有 Telegram 和 Email 都發送成功時，才會更新 `monitor-state/state/funbox-beyblade.json`。
 - baseline 建立與 `reset_baseline` 不會主動初始化通知器，所以可先驗證抓取流程，再補通知 secrets。
 - 若當輪抓到 0 個商品，workflow 會失敗，避免覆蓋有效 state。
@@ -50,6 +51,17 @@ python scripts/funbox_beyblade_monitor.py --state-file ./tmp/state/funbox-beybla
 4. 第一次建議把 `reset_baseline` 設成 `true`，先建立 `monitor-state` 分支與 baseline。
 5. baseline 建立成功後，再手動跑一次 `reset_baseline=false`，確認 workflow 能正常完成。
 6. 之後讓排程每 5 分鐘自動執行即可。
+
+## Sending A Status Report
+
+如果你想手動查詢 `categories/takaratomy/beyblade` 目前狀態，可到 `Actions -> Funbox Beyblade Monitor -> Run workflow`：
+
+1. branch 選 `main`
+2. `send_status_report` 設成 `true`
+3. 其他輸入維持 `false`
+4. 執行 workflow
+
+workflow 會把目前商品總數、現貨/缺貨/未知統計，以及前 10 項商品摘要送到 Telegram 與 Email。
 
 ## First Run Checklist
 

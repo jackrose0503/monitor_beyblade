@@ -10,6 +10,11 @@ on:
         required: false
         default: false
         type: boolean
+      send_status_report:
+        description: Send the current beyblade category status to Telegram and email
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -74,9 +79,12 @@ jobs:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
           RESET_BASELINE: ${{ github.event.inputs.reset_baseline || 'false' }}
+          SEND_STATUS_REPORT: ${{ github.event.inputs.send_status_report || 'false' }}
         run: |
           set -euo pipefail
-          if [ "${RESET_BASELINE}" = "true" ]; then
+          if [ "${SEND_STATUS_REPORT}" = "true" ]; then
+            python3 scripts/funbox_beyblade_monitor.py --send-status-report
+          elif [ "${RESET_BASELINE}" = "true" ]; then
             python3 scripts/funbox_beyblade_monitor.py \
               --state-file monitor-state-worktree/state/funbox-beyblade.json \
               --reset-baseline

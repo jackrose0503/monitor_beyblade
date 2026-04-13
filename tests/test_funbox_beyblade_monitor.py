@@ -10,7 +10,10 @@ from scripts.funbox_beyblade_monitor import (
     build_lazy_notification_sender,
     build_next_state,
     diff_products,
+    format_status_message,
+    parse_args,
     parse_product_detail,
+    run_send_status_report,
 )
 
 
@@ -252,3 +255,69 @@ class LazyNotifierTests(unittest.TestCase):
 
         self.assertEqual(constructed, ["built"])
         self.assertEqual(sent, [("telegram", "hello"), ("email", "world")])
+
+    def test_run_send_status_report_sends_both_channels(self) -> None:
+        sent: list[tuple[str, str]] = []
+
+        def sender(channel: str, message: str) -> None:
+            sent.append((channel, message))
+
+        run_send_status_report(
+            send_notification=sender,
+            checked_at="2026-04-13T01:00:00+00:00",
+            products=[
+                make_snapshot(
+                    name="A",
+                    stock="in_stock",
+                    price=100,
+                    url="https://shop.funbox.com.tw/products/a",
+                ),
+                make_snapshot(
+                    name="B",
+                    stock="sold_out",
+                    price=200,
+                    url="https://shop.funbox.com.tw/products/b",
+                ),
+            ],
+        )
+
+        self.assertEqual([channel for channel, _ in sent], ["telegram", "email"])
+        self.assertIn("目前網站狀態", sent[0][1])
+
+    def test_format_status_message_summarizes_stock_counts(self) -> None:
+        message = format_status_message(
+            checked_at="2026-04-13T01:00:00+00:00",
+            products=[
+                make_snapshot(
+                    name="A",
+                    stock="in_stock",
+                    price=100,
+                    url="https://shop.funbox.com.tw/products/a",
+                ),
+                make_snapshot(
+                    name="B",
+                    stock="sold_out",
+                    price=200,
+                    url="https://shop.funbox.com.tw/products/b",
+                ),
+                make_snapshot(
+                    name="C",
+                    stock="unknown",
+                    price=300,
+                    url="https://shop.funbox.com.tw/products/c",
+                ),
+            ],
+        )
+
+        self.assertIn("商品總數: 3", message)
+        self.assertIn("現貨: 1", message)
+        self.assertIn("缺貨: 1", message)
+        self.assertIn("庫存未知: 1", message)
+        self.assertIn("https://shop.funbox.com.tw/categories/takaratomy/beyblade", message)
+
+
+class CliArgumentTests(unittest.TestCase):
+    def test_parse_args_accepts_status_query_mode(self) -> None:
+        args = parse_args(["--send-status-report"])
+
+        self.assertTrue(args.send_status_report)

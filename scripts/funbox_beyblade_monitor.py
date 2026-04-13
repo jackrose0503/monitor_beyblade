@@ -414,11 +414,34 @@ def format_notification_message(*, events: list[ProductEvent], checked_at: str) 
 
 def main() -> int:
     args = parse_args()
+    send_notification = build_lazy_notification_sender(EnvNotifier)
+    if args.send_status_report:
+        products = fetch_current_products(args.category_url)
+        if not products:
+            raise ValueError("Category fetch returned 0 products; cannot build status report.")
+        checked_at = current_timestamp()
+        run_send_status_report(
+            send_notification=send_notification,
+            checked_at=checked_at,
+            products=products,
+        )
+        print(
+            json.dumps(
+                {
+                    "mode": "status_report_sent",
+                    "checked_at": checked_at,
+                    "product_count": len(products),
+                },
+                ensure_ascii=False,
+            )
+        )
+        return 0
+
     state_store = JsonStateStore(Path(args.state_file))
     runner = MonitorRunner(
         state_store=state_store,
         fetch_current_products=lambda: fetch_current_products(args.category_url),
-        send_notification=build_lazy_notification_sender(EnvNotifier),
+        send_notification=send_notification,
         now=current_timestamp,
     )
     result = runner.run(reset_baseline=args.reset_baseline)
@@ -436,12 +459,13 @@ def main() -> int:
     return 0
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Monitor Funbox Beyblade listings for new products and restocks.")
     parser.add_argument("--category-url", default=DEFAULT_CATEGORY_URL)
     parser.add_argument("--state-file", default=DEFAULT_STATE_FILE)
     parser.add_argument("--reset-baseline", action="store_true")
-    return parser.parse_args()
+    parser.add_argument("--send-status-report", action="store_true")
+    return parser.parse_args(argv)
 
 
 def current_timestamp() -> str:
@@ -458,6 +482,49 @@ def build_lazy_notification_sender(factory: Callable[[], EnvNotifier]) -> Callab
         notifier.send(channel, message)
 
     return send
+
+
+def run_send_status_report(
+    *,
+    send_notification: Callable[[str, str], None],
+    checked_at: str,
+    products: list[ProductSnapshot],
+) -> None:
+    message = format_status_message(checked_at=checked_at, products=products)
+    for channel in ("telegram", "email"):
+        send_notification(channel, message)
+
+
+def format_status_message(*, checked_at: str, products: list[ProductSnapshot]) -> str:
+    in_stock = sum(1 for product in products if product.stock_status == "in_stock")
+    sold_out = sum(1 for product in products if product.stock_status == "sold_out")
+    unknown = sum(1 for product in products if product.stock_status == "unknown")
+    lines = [
+        "Funbox Beyblade 目前網站狀態",
+        f"分類頁: {DEFAULT_CATEGORY_URL}",
+        f"檢查時間: {checked_at}",
+        f"商品總數: {len(products)}",
+        f"現貨: {in_stock}",
+        f"缺貨: {sold_out}",
+        f"庫存未知: {unknown}",
+        "",
+        "前 10 項商品:",
+    ]
+    for product in products[:10]:
+        price = f"NT${product.price_twd:,}" if product.price_twd is not None else "價格未知"
+        stock = {
+            "in_stock": "現貨",
+            "sold_out": "缺貨",
+            "unknown": "未知",
+        }[product.stock_status]
+        lines.extend(
+            [
+                f"- {product.name}",
+                f"  庫存: {stock} | 價格: {price}",
+                f"  連結: {product.product_url}",
+            ]
+        )
+    return "\n".join(lines)
 
 
 def _send_both_notifications(send_notification: Callable[[str, str], None], message: str) -> None:
