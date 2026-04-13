@@ -39,6 +39,7 @@ class CategoryProduct:
     product_url: str
     catalog_id: str
     name: str
+    stock_status: StockStatus = "unknown"
 
 
 @dataclass(frozen=True)
@@ -307,20 +308,29 @@ def fetch_current_products(category_url: str) -> list[ProductSnapshot]:
     for category_product in category_products:
         detail_html = fetch_url_text(category_product.product_url)
         detail = parse_product_detail(detail_html)
-        name = detail.name or category_product.name
-        snapshots.append(
-            ProductSnapshot(
-                product_url=category_product.product_url,
-                catalog_id=category_product.catalog_id,
-                product_code=detail.product_code,
-                name=name,
-                price_twd=detail.price_twd,
-                stock_status=detail.stock_status,
-                first_seen_at="",
-                last_seen_at="",
-            )
-        )
+        snapshots.append(build_product_snapshot(category_product=category_product, detail=detail))
     return snapshots
+
+
+def build_product_snapshot(
+    *,
+    category_product: CategoryProduct,
+    detail: ProductDetail,
+) -> ProductSnapshot:
+    stock_status = _merge_stock_status(
+        category_stock_status=category_product.stock_status,
+        detail_stock_status=detail.stock_status,
+    )
+    return ProductSnapshot(
+        product_url=category_product.product_url,
+        catalog_id=category_product.catalog_id,
+        product_code=detail.product_code,
+        name=detail.name or category_product.name,
+        price_twd=detail.price_twd,
+        stock_status=stock_status,
+        first_seen_at="",
+        last_seen_at="",
+    )
 
 
 def fetch_category_products(category_url: str) -> list[CategoryProduct]:
@@ -348,10 +358,17 @@ def fetch_category_products(category_url: str) -> list[CategoryProduct]:
                   .map((value) => (value || '').replace(/\\s+/g, ' ').trim())
                   .filter(Boolean);
                 const name = candidates.sort((a, b) => b.length - a.length)[0] || href.split('/').pop();
+                const stockText = (card.textContent || '').replace(/\\s+/g, ' ').trim();
                 const dataset = Object.assign({}, card.dataset || {}, node.dataset || {});
                 const catalogId = Object.values(dataset).find((value) => /^\\d+$/.test(String(value || ''))) || '';
                 if (!seen.has(href) || seen.get(href).name.length < name.length) {
-                  seen.set(href, { product_url: href, catalog_id: String(catalogId), name });
+                  let stockStatus = 'unknown';
+                  if (/商品已售完|售完待補貨|庫存不足|已售完|缺貨/.test(stockText)) {
+                    stockStatus = 'sold_out';
+                  } else if (/加入購物車|尚有庫存|可購買/.test(stockText)) {
+                    stockStatus = 'in_stock';
+                  }
+                  seen.set(href, { product_url: href, catalog_id: String(catalogId), name, stock_status: stockStatus });
                 }
               }
               return Array.from(seen.values());
@@ -594,6 +611,14 @@ def _parse_stock_status(text: str) -> StockStatus:
     ):
         return "sold_out"
     if any(keyword in stock_text for keyword in ("尚有庫存", "可購買", "現貨供應")):
+        return "in_stock"
+    return "unknown"
+
+
+def _merge_stock_status(*, category_stock_status: StockStatus, detail_stock_status: StockStatus) -> StockStatus:
+    if category_stock_status == "sold_out" or detail_stock_status == "sold_out":
+        return "sold_out"
+    if category_stock_status == "in_stock" or detail_stock_status == "in_stock":
         return "in_stock"
     return "unknown"
 

@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from scripts.funbox_beyblade_monitor import (
+    CategoryProduct,
     EnvNotifier,
     MonitorRunner,
     MonitorState,
@@ -12,6 +13,7 @@ from scripts.funbox_beyblade_monitor import (
     _split_csv_values,
     build_lazy_notification_sender,
     build_next_state,
+    build_product_snapshot,
     diff_products,
     format_status_message,
     parse_args,
@@ -395,3 +397,18 @@ class RecipientParsingTests(unittest.TestCase):
         self.assertEqual(post.call_count, 2)
         self.assertEqual(post.call_args_list[0].kwargs["json"]["chat_id"], "12345")
         self.assertEqual(post.call_args_list[1].kwargs["json"]["chat_id"], "-10098765")
+
+
+class CategoryStockPriorityTests(unittest.TestCase):
+    def test_build_product_snapshot_prefers_category_sold_out_signal(self) -> None:
+        category_product = CategoryProduct(
+            product_url="https://shop.funbox.com.tw/products/bb09726",
+            catalog_id="66836005",
+            name="BEYBLADE X 戰鬥陀螺 CX-14 騎士堡壘",
+            stock_status="sold_out",
+        )
+        detail = parse_product_detail(DETAIL_HTML_IN_STOCK)
+
+        snapshot = build_product_snapshot(category_product=category_product, detail=detail)
+
+        self.assertEqual(snapshot.stock_status, "sold_out")
