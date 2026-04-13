@@ -585,16 +585,27 @@ def _normalize_stock_status(value: str) -> StockStatus:
 
 
 def _parse_stock_status(text: str) -> StockStatus:
-    if "線上庫存" not in text:
+    stock_text = _extract_primary_stock_text(text)
+    if not stock_text:
         return "unknown"
-    if any(keyword in text for keyword in ("尚有庫存", "可購買", "現貨供應")):
-        return "in_stock"
     if any(
-        keyword in text
+        keyword in stock_text
         for keyword in ("已售完", "補貨中", "缺貨", "暫無庫存", "庫存不足", "售完待補貨")
     ):
         return "sold_out"
+    if any(keyword in stock_text for keyword in ("尚有庫存", "可購買", "現貨供應")):
+        return "in_stock"
     return "unknown"
+
+
+def _extract_primary_stock_text(text: str) -> str:
+    match = re.search(
+        r"線上庫存\s*[:：]\s*(.+?)(?:門市庫存狀態查詢|數量\s*[:：]|商品編號\s*[:：]|加入收藏|加入購物車|$)",
+        text,
+    )
+    if not match:
+        return ""
+    return match.group(1).strip()
 
 
 def _require_env(key: str) -> str:
