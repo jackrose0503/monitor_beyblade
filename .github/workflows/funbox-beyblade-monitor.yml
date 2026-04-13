@@ -1,0 +1,98 @@
+name: Funbox Beyblade Monitor
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      reset_baseline:
+        description: Reset baseline without sending notifications
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: funbox-beyblade-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: python3 -m pip install -r requirements.txt
+
+      - name: Install Playwright browser
+        run: python3 -m playwright install --with-deps chromium
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Prepare monitor-state worktree
+        run: |
+          set -euo pipefail
+          rm -rf monitor-state-worktree
+          if git ls-remote --exit-code --heads origin monitor-state >/dev/null 2>&1; then
+            git fetch --depth=1 origin monitor-state
+            git worktree add --detach monitor-state-worktree FETCH_HEAD
+          else
+            git worktree add --detach monitor-state-worktree HEAD
+            (
+              cd monitor-state-worktree
+              git checkout --orphan monitor-state
+              git rm -rf . >/dev/null 2>&1 || true
+              find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+            )
+          fi
+          mkdir -p monitor-state-worktree/state
+
+      - name: Run monitor
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          RESET_BASELINE: ${{ github.event.inputs.reset_baseline || 'false' }}
+        run: |
+          set -euo pipefail
+          if [ "${RESET_BASELINE}" = "true" ]; then
+            python3 scripts/funbox_beyblade_monitor.py \
+              --state-file monitor-state-worktree/state/funbox-beyblade.json \
+              --reset-baseline
+          else
+            python3 scripts/funbox_beyblade_monitor.py \
+              --state-file monitor-state-worktree/state/funbox-beyblade.json
+          fi
+
+      - name: Commit updated state
+        run: |
+          set -euo pipefail
+          cd monitor-state-worktree
+          git add state/funbox-beyblade.json
+          if git diff --cached --quiet; then
+            echo "No state changes to commit."
+            exit 0
+          fi
+          git commit -m "chore: update Beyblade monitor state"
+          git push origin HEAD:monitor-state
