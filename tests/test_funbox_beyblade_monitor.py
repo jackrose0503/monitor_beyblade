@@ -237,6 +237,11 @@ class ParsingAndDiffTests(unittest.TestCase):
         self.assertEqual(detail.price_twd, 495)
         self.assertEqual(detail.stock_status, "sold_out")
 
+    def test_resolve_stock_status_from_signals_treats_hot_selling_as_in_stock(self) -> None:
+        status = resolve_stock_status_from_signals(stock_text="熱賣中")
+
+        self.assertEqual(status, "in_stock")
+
     def test_parse_product_detail_uses_primary_stock_section_over_other_text(self) -> None:
         detail = parse_product_detail(DETAIL_HTML_STOCK_SECTION_WITH_UNRELATED_IN_STOCK_TEXT)
 
@@ -507,14 +512,14 @@ class LazyNotifierTests(unittest.TestCase):
         self.assertEqual([channel for channel, _ in sent], ["telegram", "email"])
         self.assertIn("目前網站狀態", sent[0][1])
         self.assertIn("檢查時間: 2026-04-13T09:00:00+08:00", sent[0][1])
-        self.assertIn("商品品項: A", sent[0][1])
-        self.assertIn("線上庫存: 線上現貨", sent[0][1])
-        self.assertIn("實體庫存:", sent[0][1])
-        self.assertIn(f"{TRACKED_STORE_LABELS['AD318']}: TRUE", sent[0][1])
-        self.assertIn(f"{TRACKED_STORE_LABELS['AD331']}: FALSE", sent[0][1])
-        self.assertIn(f"{OTHER_STORE_LABEL}: TRUE（請直接上官網查詢）", sent[0][1])
+        self.assertIn("1. A", sent[0][1])
+        self.assertIn("線上: 🟢 有貨", sent[0][1])
+        self.assertIn("實體:", sent[0][1])
+        self.assertIn("- AD318 台南西門: 🟢", sent[0][1])
+        self.assertIn("- AD331 南紡購物中心: 🔴", sent[0][1])
+        self.assertIn("- 其他: 🟢 請直接上官網查詢", sent[0][1])
         self.assertIn("價格: NT$100", sent[0][1])
-        self.assertNotIn("\n庫存:", sent[0][1])
+        self.assertNotIn("商品品項:", sent[0][1])
 
     def test_format_status_message_summarizes_stock_counts(self) -> None:
         message = format_status_message(
@@ -559,15 +564,13 @@ class LazyNotifierTests(unittest.TestCase):
 
         self.assertIn("商品總數: 3", message)
         self.assertIn("檢查時間: 2026-04-13T09:00:00+08:00", message)
-        self.assertIn("線上現貨: 1", message)
-        self.assertIn("線上缺貨: 1", message)
-        self.assertIn("線上庫存未知: 1", message)
+        self.assertIn("線上統計: 🟢 1 | 🔴 1 | 🟡 1", message)
         self.assertIn("https://shop.funbox.com.tw/categories/takaratomy/beyblade", message)
-        self.assertIn("商品品項: A", message)
-        self.assertIn("線上庫存: 線上現貨", message)
-        self.assertIn("實體庫存:", message)
-        self.assertIn(f"{TRACKED_STORE_LABELS['AD316']}: TRUE", message)
-        self.assertIn(f"{OTHER_STORE_LABEL}: TRUE（請直接上官網查詢）", message)
+        self.assertIn("1. A", message)
+        self.assertIn("線上: 🟢 有貨", message)
+        self.assertIn("實體:", message)
+        self.assertIn("- AD316 台南遠百: 🟢", message)
+        self.assertIn("- 其他: 🟢 請直接上官網查詢", message)
         self.assertIn("價格: NT$100", message)
 
     def test_format_notification_message_converts_checked_at_for_display(self) -> None:
@@ -595,15 +598,14 @@ class LazyNotifierTests(unittest.TestCase):
         )
 
         self.assertIn("檢查時間: 2026-04-13T09:00:00+08:00", message)
-        self.assertIn("商品品項: BEYBLADE X 戰鬥陀螺 BX-44 三角強襲", message)
-        self.assertIn("線上庫存: 線上現貨", message)
-        self.assertIn(f"{TRACKED_STORE_LABELS['AD318']}: TRUE", message)
-        self.assertIn(f"{TRACKED_STORE_LABELS['AD331']}: FALSE", message)
-        self.assertIn(f"{OTHER_STORE_LABEL}: FALSE（請直接上官網查詢）", message)
+        self.assertIn("BEYBLADE X 戰鬥陀螺 BX-44 三角強襲", message)
+        self.assertIn("線上: 🟢 有貨", message)
+        self.assertIn("- AD318 台南西門: 🟢", message)
+        self.assertIn("- AD331 南紡購物中心: 🔴", message)
+        self.assertIn("- 其他: 🔴 請直接上官網查詢", message)
         self.assertIn("價格: NT$550", message)
         self.assertIn("連結: https://shop.funbox.com.tw/products/bb93952", message)
-        self.assertNotIn("商品編號:", message)
-        self.assertNotIn("分類商品 ID:", message)
+        self.assertNotIn("商品品項:", message)
 
 
 class CliArgumentTests(unittest.TestCase):
@@ -646,7 +648,7 @@ class RecipientParsingTests(unittest.TestCase):
 
 
 class CategoryStockPriorityTests(unittest.TestCase):
-    def test_build_product_snapshot_prefers_category_sold_out_signal(self) -> None:
+    def test_build_product_snapshot_prefers_detail_signal_when_known(self) -> None:
         category_product = CategoryProduct(
             product_url="https://shop.funbox.com.tw/products/bb09726",
             catalog_id="66836005",
@@ -657,7 +659,7 @@ class CategoryStockPriorityTests(unittest.TestCase):
 
         snapshot = build_product_snapshot(category_product=category_product, detail=detail)
 
-        self.assertEqual(snapshot.stock_status, "sold_out")
+        self.assertEqual(snapshot.stock_status, "in_stock")
 
 
 class RenderedStockSignalTests(unittest.TestCase):

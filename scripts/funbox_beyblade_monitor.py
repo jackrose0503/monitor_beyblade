@@ -43,6 +43,14 @@ TRACKED_STORE_LABELS = {
     "AD316": "AD316台南遠百(Funbox Toys)",
 }
 OTHER_STORE_LABEL = "其他"
+STORE_DISPLAY_LABELS = {
+    TRACKED_STORE_LABELS["AD318"]: "AD318 台南西門",
+    TRACKED_STORE_LABELS["AD331"]: "AD331 南紡購物中心",
+    TRACKED_STORE_LABELS["AD351"]: "AD351 台南三井",
+    TRACKED_STORE_LABELS["AD311"]: "AD311 台南三越",
+    TRACKED_STORE_LABELS["AD316"]: "AD316 台南遠百",
+    OTHER_STORE_LABEL: "其他",
+}
 
 
 @dataclass(frozen=True)
@@ -494,7 +502,7 @@ def format_notification_message(*, events: list[ProductEvent], checked_at: str) 
     ]
     for event in events:
         label = "新上架" if event.event_type == "new_listing" else "補貨"
-        lines.append(f"[{label}]")
+        lines.append(f"[{label}] {event.product.name}")
         lines.extend(_format_product_lines(event.product))
         lines.append("")
     return "\n".join(lines).strip()
@@ -593,15 +601,14 @@ def format_status_message(*, checked_at: str, products: list[ProductSnapshot]) -
         f"分類頁: {DEFAULT_CATEGORY_URL}",
         f"檢查時間: {display_checked_at}",
         f"商品總數: {len(products)}",
-        f"線上現貨: {in_stock}",
-        f"線上缺貨: {sold_out}",
-        f"線上庫存未知: {unknown}",
+        f"線上統計: 🟢 {in_stock} | 🔴 {sold_out} | 🟡 {unknown}",
         "",
         "前 10 項商品:",
     ]
-    for product in products[:10]:
-        lines.extend(_format_product_lines(product, prefix="- "))
-    return "\n".join(lines)
+    for index, product in enumerate(products[:10], start=1):
+        lines.extend(_format_product_lines(product, index=index))
+        lines.append("")
+    return "\n".join(lines).strip()
 
 
 def _send_both_notifications(send_notification: Callable[[str, str], None], message: str) -> None:
@@ -628,16 +635,15 @@ def _format_display_timestamp(timestamp: str) -> str:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(DISPLAY_TIMEZONE).isoformat()
-
-
-def _format_product_lines(product: ProductSnapshot, *, prefix: str = "") -> list[str]:
-    store_inventory_lines = [f"實體庫存:"]
+def _format_product_lines(product: ProductSnapshot, *, index: int | None = None) -> list[str]:
+    store_inventory_lines = ["實體:"]
     store_inventory_lines.extend(
         _format_store_inventory_lines(product.store_inventory or _default_store_inventory_summary())
     )
+    title = product.name if index is None else f"{index}. {product.name}"
     lines = [
-        f"{prefix}商品品項: {product.name}",
-        f"線上庫存: {_format_online_stock(product.stock_status)}",
+        title,
+        f"線上: {_format_online_stock(product.stock_status)}",
         *store_inventory_lines,
         f"價格: {_format_price(product.price_twd)}",
         f"連結: {product.product_url}",
@@ -647,9 +653,9 @@ def _format_product_lines(product: ProductSnapshot, *, prefix: str = "") -> list
 
 def _format_online_stock(stock_status: StockStatus) -> str:
     return {
-        "in_stock": "線上現貨",
-        "sold_out": "線上缺貨",
-        "unknown": "線上庫存未知",
+        "in_stock": "🟢 有貨",
+        "sold_out": "🔴 沒貨",
+        "unknown": "🟡 未知",
     }[stock_status]
 
 
@@ -662,11 +668,22 @@ def _format_store_inventory_lines(
 ) -> list[str]:
     normalized = _normalize_store_inventory_summary(store_inventory)
     lines = [
-        f"{label}: {normalized[label]}"
+        f"- {STORE_DISPLAY_LABELS[label]}: {_format_store_inventory_status(normalized[label])}"
         for label in TRACKED_STORE_LABELS.values()
     ]
-    lines.append(f"{OTHER_STORE_LABEL}: {normalized[OTHER_STORE_LABEL]}（請直接上官網查詢）")
+    lines.append(
+        f"- {STORE_DISPLAY_LABELS[OTHER_STORE_LABEL]}: "
+        f"{_format_store_inventory_status(normalized[OTHER_STORE_LABEL])} 請直接上官網查詢"
+    )
     return lines
+
+
+def _format_store_inventory_status(status: StoreInventoryStatus) -> str:
+    return {
+        "TRUE": "🟢",
+        "FALSE": "🔴",
+        "UNKNOWN": "🟡",
+    }[status]
 
 
 def _fetch_store_inventory_rows_with_page(page: object) -> list[dict[str, str]]:
@@ -704,20 +721,25 @@ def _fetch_store_inventory_rows_with_page(page: object) -> list[dict[str, str]]:
           const text = (value) => (value || '').replace(/\\s+/g, ' ').trim();
           const visible = (element) =>
             Boolean(element && (element.offsetWidth || element.offsetHeight || element.getClientRects().length));
-
-          const storeElements = Array.from(document.querySelectorAll('body *')).filter((element) => {
-            if (!visible(element)) return false;
-            const value = text(element.textContent || '');
-            return /AD\\d{3}/.test(value) && /[○△✕×]|熱賣中|即將完售|缺貨中|缺貨|售完|無庫存/.test(value);
-          });
-
+          const activePane =
+            Array.from(document.querySelectorAll('[id*="inventory_quantities_tab_content"].active, .tab-pane.active'))
+              .find((element) => visible(element) && /AD\\d{3}/.test(text(element.textContent || ''))) ||
+            Array.from(document.querySelectorAll('[id*="inventory_quantities_tab_content"], .tab-pane'))
+              .find((element) => visible(element) && /AD\\d{3}/.test(text(element.textContent || ''))) ||
+            document.body;
+          const storeElements = Array.from(activePane.querySelectorAll('tr, li, .row, [class*="inventory"], [class*="store"]'))
+            .filter((element) => {
+              if (!visible(element)) return false;
+              const value = text(element.textContent || '');
+              return /AD\\d{3}/.test(value);
+            });
           const seen = new Map();
           for (const element of storeElements) {
             const value = text(element.textContent || '');
-            const match = value.match(/(AD\\d{3}[^○△✕×]*?)(?:\\s+|)([○△✕×]|熱賣中|即將完售|缺貨中|缺貨|售完|無庫存)/);
+            const match = value.match(/(AD\\d{3}[^○△✕×]*?)(?:\\s+|)([○△✕×]|熱賣中|即將完售|缺貨中|缺貨|售完|無庫存)?/);
             if (!match) continue;
             const storeText = text(match[1]);
-            const statusText = text(match[2]);
+            const statusText = text(match[2] || '');
             const storeCodeMatch = storeText.match(/AD\\d{3}/);
             const key = storeCodeMatch ? storeCodeMatch[0] : storeText;
             if (!seen.has(key)) {
@@ -923,11 +945,9 @@ def _parse_stock_status(text: str) -> StockStatus:
 
 
 def _merge_stock_status(*, category_stock_status: StockStatus, detail_stock_status: StockStatus) -> StockStatus:
-    if category_stock_status == "sold_out" or detail_stock_status == "sold_out":
-        return "sold_out"
-    if category_stock_status == "in_stock" or detail_stock_status == "in_stock":
-        return "in_stock"
-    return "unknown"
+    if detail_stock_status != "unknown":
+        return detail_stock_status
+    return category_stock_status
 
 
 def resolve_stock_status_from_signals(
@@ -937,7 +957,7 @@ def resolve_stock_status_from_signals(
     fallback_text: str = "",
 ) -> StockStatus:
     sold_out_keywords = ("已售完", "補貨中", "缺貨", "暫無庫存", "庫存不足", "售完待補貨", "商品已售完")
-    in_stock_keywords = ("尚有庫存", "可購買", "現貨供應", "加入購物車")
+    in_stock_keywords = ("尚有庫存", "可購買", "現貨供應", "加入購物車", "熱賣中", "即將完售")
     combined = " ".join(part for part in (stock_text, action_text, fallback_text) if part)
     if any(keyword in combined for keyword in sold_out_keywords):
         return "sold_out"
