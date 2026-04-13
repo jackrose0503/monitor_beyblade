@@ -148,6 +148,30 @@ class ParsingAndDiffTests(unittest.TestCase):
 
         self.assertIn(('text=南區', 1), page.clicked_selectors)
 
+    def test_fetch_store_inventory_rows_with_page_prefers_non_mobile_south_selector(self) -> None:
+        page = StoreInventoryPageStub(
+            rows=[
+                {
+                    "store_text": "AD331南紡購物中心(Funbox Toys)",
+                    "status_text": "✕",
+                    "row_html": "",
+                }
+            ],
+            selector_visibility={
+                'text=門市庫存狀態查詢': [True],
+                'a[href*="inventory_quantities"]': [True],
+                'a[role="tab"]:has-text("南區"):not([id^="mobile_"])': [True],
+                'text=南區': [True],
+            },
+        )
+
+        _fetch_store_inventory_rows_with_page(page)
+
+        self.assertIn(
+            ('a[role="tab"]:has-text("南區"):not([id^="mobile_"])', 0),
+            page.clicked_selectors,
+        )
+
     def test_summarize_store_inventory_rows_groups_tracked_stores_and_other(self) -> None:
         summary = _summarize_store_inventory_rows(
             [

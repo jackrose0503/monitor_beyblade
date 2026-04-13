@@ -686,6 +686,9 @@ def _fetch_store_inventory_rows_with_page(page: object) -> list[dict[str, str]]:
     south_tab = _first_present_locator(
         page,
         [
+            'a[role="tab"]:has-text("南區"):not([id^="mobile_"])',
+            'a[href="#inventory_quantities_tab_content-3"]',
+            '#inventory_quantities_tab-3',
             'text=南區',
             'button:has-text("南區")',
             '[role="tab"]:has-text("南區")',
