@@ -1,125 +1,125 @@
 {
-  "checked_at": "2026-04-13T07:00:57.205381+00:00",
+  "checked_at": "2026-04-13T07:43:47.757538+00:00",
   "products": [
     {
       "product_url": "https://shop.funbox.com.tw/products/bbpr95431",
       "catalog_id": "999999",
-      "product_code": "BBPR95431",
+      "product_code": "",
       "name": "【先行預購】APP兌換 BXH-14 戰神伏特S4-70V 燦金版",
       "price_twd": 999999,
-      "stock_status": "in_stock",
+      "stock_status": "sold_out",
       "first_seen_at": "2026-04-13T05:12:25.739733+00:00",
-      "last_seen_at": "2026-04-13T07:00:57.205381+00:00"
+      "last_seen_at": "2026-04-13T07:43:47.757538+00:00"
     },
     {
       "product_url": "https://shop.funbox.com.tw/products/bb99735",
       "catalog_id": "495",
-      "product_code": "BB99735",
+      "product_code": "",
       "name": "BEYBLADE X 戰鬥陀螺 BXG-21 暴風巨神",
       "price_twd": 495,
-      "stock_status": "in_stock",
+      "stock_status": "sold_out",
       "first_seen_at": "2026-04-13T05:12:25.739733+00:00",
-      "last_seen_at": "2026-04-13T07:00:57.205381+00:00"
+      "last_seen_at": "2026-04-13T07:43:47.757538+00:00"
     },
     {
       "product_url": "https://shop.funbox.com.tw/products/bb09726",
       "catalog_id": "495",
-      "product_code": "BB09726",
+      "product_code": "",
       "name": "BEYBLADE X 戰鬥陀螺 CX-14 騎士堡壘",
       "price_twd": 495,
-      "stock_status": "in_stock",
+      "stock_status": "sold_out",
       "first_seen_at": "2026-04-13T05:12:25.739733+00:00",
-      "last_seen_at": "2026-04-13T07:00:57.205381+00:00"
+      "last_seen_at": "2026-04-13T07:43:47.757538+00:00"
     },
     {
       "product_url": "https://shop.funbox.com.tw/products/bb09615",
       "catalog_id": "350",
-      "product_code": "BB09615",
+      "product_code": "",
       "name": "BEYBLADE X 戰鬥陀螺 CX-12 鳳凰閃焰",
       "price_twd": 350,
-      "stock_status": "in_stock",
+      "stock_status": "sold_out",
       "first_seen_at": "2026-04-13T05:12:25.739733+00:00",
-      "last_seen_at": "2026-04-13T07:00:57.205381+00:00"
+      "last_seen_at": "2026-04-13T07:43:47.757538+00:00"
     },
     {
       "product_url": "https://shop.funbox.com.tw/products/bb09946",
       "catalog_id": "350",
-      "product_code": "BB09946",
+      "product_code": "",
       "name": "BEYBLADE X 戰鬥陀螺 BXG-22 龍騎士S",
       "price_twd": 350,
-      "stock_status": "in_stock",
+      "stock_status": "sold_out",
       "first_seen_at": "2026-04-13T05:12:25.739733+00:00",
-      "last_seen_at": "2026-04-13T07:00:57.205381+00:00"
+      "last_seen_at": "2026-04-13T07:43:47.757538+00:00"
     },
     {
       "product_url": "https://shop.funbox.com.tw/products/bb95749",
       "catalog_id": "350",
-      "product_code": "BB95749",
+      "product_code": "",
       "name": "BEYBLADE X 戰鬥陀螺 BXG-20 巨岩雄獅",
       "price_twd": 350,
-      "stock_status": "in_stock",
+      "stock_status": "sold_out",
       "first_seen_at": "2026-04-13T05:12:25.739733+00:00",
-      "last_seen_at": "2026-04-13T07:00:57.205381+00:00"
+      "last_seen_at": "2026-04-13T07:43:47.757538+00:00"
     },
     {
       "product_url": "https://shop.funbox.com.tw/products/bbpr99656",
       "catalog_id": "995",
-      "product_code": "BBPR99656",
+      "product_code": "",
       "name": "BEYBLADE X 戰鬥陀螺 BXG-41 棘龍 / 翼龍",
       "price_twd": 995,
-      "stock_status": "in_stock",
+      "stock_status": "sold_out",
       "first_seen_at": "2026-04-13T05:12:25.739733+00:00",
-      "last_seen_at": "2026-04-13T07:00:57.205381+00:00"
+      "last_seen_at": "2026-04-13T07:43:47.757538+00:00"
     },
     {
       "product_url": "https://shop.funbox.com.tw/products/bb93952",
       "catalog_id": "325",
-      "product_code": "BB93952",
+      "product_code": "",
       "name": "BEYBLADE X 戰鬥陀螺 BX-44 三角強襲",
       "price_twd": 325,
-      "stock_status": "in_stock",
+      "stock_status": "sold_out",
       "first_seen_at": "2026-04-13T05:12:25.739733+00:00",
-      "last_seen_at": "2026-04-13T07:00:57.205381+00:00"
+      "last_seen_at": "2026-04-13T07:43:47.757538+00:00"
     },
     {
       "product_url": "https://shop.funbox.com.tw/products/bbpr98084",
       "catalog_id": "995",
-      "product_code": "BBPR98084",
+      "product_code": "",
       "name": "BEYBLADE X 戰鬥陀螺 BXG-29 鋼鐵人 / 薩諾斯",
       "price_twd": 799,
-      "stock_status": "in_stock",
+      "stock_status": "sold_out",
       "first_seen_at": "2026-04-13T05:12:25.739733+00:00",
-      "last_seen_at": "2026-04-13T07:00:57.205381+00:00"
+      "last_seen_at": "2026-04-13T07:43:47.757538+00:00"
     },
     {
       "product_url": "https://shop.funbox.com.tw/products/bbpr98085",
       "catalog_id": "995",
-      "product_code": "BBPR98085",
+      "product_code": "",
       "name": "BEYBLADE X 戰鬥陀螺 BXG-30 蜘蛛人 / 猛毒",
       "price_twd": 799,
-      "stock_status": "in_stock",
+      "stock_status": "sold_out",
       "first_seen_at": "2026-04-13T05:12:25.739733+00:00",
-      "last_seen_at": "2026-04-13T07:00:57.205381+00:00"
+      "last_seen_at": "2026-04-13T07:43:47.757538+00:00"
     },
     {
       "product_url": "https://shop.funbox.com.tw/products/bbpr98234",
       "catalog_id": "995",
-      "product_code": "BBPR98234",
+      "product_code": "",
       "name": "BEYBLADE X 戰鬥陀螺 BXG-33路克天行者/達斯維達",
       "price_twd": 799,
-      "stock_status": "in_stock",
+      "stock_status": "sold_out",
       "first_seen_at": "2026-04-13T05:12:25.739733+00:00",
-      "last_seen_at": "2026-04-13T07:00:57.205381+00:00"
+      "last_seen_at": "2026-04-13T07:43:47.757538+00:00"
     },
     {
       "product_url": "https://shop.funbox.com.tw/products/bb93950",
       "catalog_id": "295",
-      "product_code": "BB93950",
+      "product_code": "",
       "name": "BEYBLADE X 戰鬥陀螺 BX-38 赫燃天鳳",
       "price_twd": 295,
-      "stock_status": "in_stock",
+      "stock_status": "sold_out",
       "first_seen_at": "2026-04-13T05:12:25.739733+00:00",
-      "last_seen_at": "2026-04-13T07:00:57.205381+00:00"
+      "last_seen_at": "2026-04-13T07:43:47.757538+00:00"
     }
   ]
 }
