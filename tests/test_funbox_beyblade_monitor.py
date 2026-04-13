@@ -124,9 +124,29 @@ class ParsingAndDiffTests(unittest.TestCase):
 
         self.assertEqual(
             page.clicked_selectors,
-            ['text=門市庫存狀態查詢', 'text=南區'],
+            [('text=門市庫存狀態查詢', 0), ('text=南區', 0)],
         )
         self.assertEqual(rows[0]["store_text"], "AD331南紡購物中心(Funbox Toys)")
+
+    def test_fetch_store_inventory_rows_with_page_prefers_visible_south_tab(self) -> None:
+        page = StoreInventoryPageStub(
+            rows=[
+                {
+                    "store_text": "AD331南紡購物中心(Funbox Toys)",
+                    "status_text": "✕",
+                    "row_html": "",
+                }
+            ],
+            selector_visibility={
+                'text=門市庫存狀態查詢': [True],
+                'a[href*="inventory_quantities"]': [True],
+                'text=南區': [False, True],
+            },
+        )
+
+        _fetch_store_inventory_rows_with_page(page)
+
+        self.assertIn(('text=南區', 1), page.clicked_selectors)
 
     def test_summarize_store_inventory_rows_groups_tracked_stores_and_other(self) -> None:
         summary = _summarize_store_inventory_rows(
@@ -293,29 +313,41 @@ class StubNotifier:
 
 
 class StubLocator:
-    def __init__(self, page: "StoreInventoryPageStub", selector: str) -> None:
+    def __init__(self, page: "StoreInventoryPageStub", selector: str, index: int = 0) -> None:
         self.page = page
         self.selector = selector
+        self.index = index
 
     def count(self) -> int:
-        return 1 if self.selector in self.page.present_selectors else 0
+        return len(self.page.selector_visibility.get(self.selector, []))
 
     @property
     def first(self) -> "StubLocator":
-        return self
+        return StubLocator(self.page, self.selector, 0)
+
+    def nth(self, index: int) -> "StubLocator":
+        return StubLocator(self.page, self.selector, index)
+
+    def is_visible(self) -> bool:
+        return self.page.selector_visibility.get(self.selector, [])[self.index]
 
     def click(self) -> None:
-        self.page.clicked_selectors.append(self.selector)
+        self.page.clicked_selectors.append((self.selector, self.index))
 
 
 class StoreInventoryPageStub:
-    def __init__(self, *, rows: list[dict[str, str]]) -> None:
-        self.present_selectors = {
-            'text=門市庫存狀態查詢',
-            'a[href*="inventory_quantities"]',
-            'text=南區',
+    def __init__(
+        self,
+        *,
+        rows: list[dict[str, str]],
+        selector_visibility: dict[str, list[bool]] | None = None,
+    ) -> None:
+        self.selector_visibility = selector_visibility or {
+            'text=門市庫存狀態查詢': [True],
+            'a[href*="inventory_quantities"]': [True],
+            'text=南區': [True],
         }
-        self.clicked_selectors: list[str] = []
+        self.clicked_selectors: list[tuple[str, int]] = []
         self.rows = rows
 
     def locator(self, selector: str) -> StubLocator:

@@ -735,8 +735,17 @@ def _fetch_store_inventory_rows_with_page(page: object) -> list[dict[str, str]]:
 def _first_present_locator(page: object, selectors: list[str]) -> object | None:
     for selector in selectors:
         locator = page.locator(selector)
-        if locator.count():
-            return locator.first
+        count = locator.count()
+        if not count:
+            continue
+        for index in range(count):
+            candidate = locator.nth(index)
+            try:
+                if candidate.is_visible():
+                    return candidate
+            except Exception:
+                continue
+        return locator.first
     return None
 
 
