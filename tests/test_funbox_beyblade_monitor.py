@@ -18,6 +18,7 @@ from scripts.funbox_beyblade_monitor import (
     format_status_message,
     parse_args,
     parse_product_detail,
+    resolve_stock_status_from_signals,
     run_send_status_report,
 )
 
@@ -354,10 +355,11 @@ class LazyNotifierTests(unittest.TestCase):
         )
 
         self.assertIn("商品總數: 3", message)
-        self.assertIn("現貨: 1", message)
-        self.assertIn("缺貨: 1", message)
-        self.assertIn("庫存未知: 1", message)
+        self.assertIn("線上現貨: 1", message)
+        self.assertIn("線上缺貨: 1", message)
+        self.assertIn("線上庫存未知: 1", message)
         self.assertIn("https://shop.funbox.com.tw/categories/takaratomy/beyblade", message)
+        self.assertIn("庫存: 線上現貨", message)
 
 
 class CliArgumentTests(unittest.TestCase):
@@ -412,3 +414,13 @@ class CategoryStockPriorityTests(unittest.TestCase):
         snapshot = build_product_snapshot(category_product=category_product, detail=detail)
 
         self.assertEqual(snapshot.stock_status, "sold_out")
+
+
+class RenderedStockSignalTests(unittest.TestCase):
+    def test_resolve_stock_status_from_signals_prefers_sold_out_button(self) -> None:
+        status = resolve_stock_status_from_signals(
+            stock_text="庫存不足",
+            action_text="售完待補貨",
+        )
+
+        self.assertEqual(status, "sold_out")

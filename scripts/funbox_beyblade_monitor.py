@@ -303,12 +303,19 @@ def parse_product_detail(html: str) -> ProductDetail:
 
 
 def fetch_current_products(category_url: str) -> list[ProductSnapshot]:
-    category_products = fetch_category_products(category_url)
-    snapshots = []
-    for category_product in category_products:
-        detail_html = fetch_url_text(category_product.product_url)
-        detail = parse_product_detail(detail_html)
-        snapshots.append(build_product_snapshot(category_product=category_product, detail=detail))
+    if sync_playwright is None:  # pragma: no cover - runtime dependency
+        raise RuntimeError("playwright is required to fetch current products")
+
+    with sync_playwright() as playwright:  # pragma: no cover - runtime dependency
+        browser = playwright.chromium.launch(headless=True)
+        category_page = browser.new_page()
+        detail_page = browser.new_page()
+        category_products = _fetch_category_products_with_page(category_page, category_url)
+        snapshots = []
+        for category_product in category_products:
+            detail = fetch_product_detail_with_page(detail_page, category_product.product_url)
+            snapshots.append(build_product_snapshot(category_product=category_product, detail=detail))
+        browser.close()
     return snapshots
 
 
@@ -340,43 +347,48 @@ def fetch_category_products(category_url: str) -> list[CategoryProduct]:
     with sync_playwright() as playwright:  # pragma: no cover - runtime dependency
         browser = playwright.chromium.launch(headless=True)
         page = browser.new_page()
-        page.goto(category_url, wait_until="networkidle", timeout=DEFAULT_TIMEOUT_SECONDS * 1000)
-        page.wait_for_timeout(2_000)
-        items = page.locator('a[href*="/products/"]').evaluate_all(
-            """
-            (nodes) => {
-              const seen = new Map();
-              for (const node of nodes) {
-                const href = new URL(node.getAttribute('href'), window.location.origin).toString();
-                const card = node.closest('[class*="product"], [data-product-id], [data-id]') || node;
-                const candidates = [
-                  node.getAttribute('title'),
-                  node.textContent,
-                  node.querySelector('img')?.getAttribute('alt'),
-                  card.textContent,
-                ]
-                  .map((value) => (value || '').replace(/\\s+/g, ' ').trim())
-                  .filter(Boolean);
-                const name = candidates.sort((a, b) => b.length - a.length)[0] || href.split('/').pop();
-                const stockText = (card.textContent || '').replace(/\\s+/g, ' ').trim();
-                const dataset = Object.assign({}, card.dataset || {}, node.dataset || {});
-                const catalogId = Object.values(dataset).find((value) => /^\\d+$/.test(String(value || ''))) || '';
-                if (!seen.has(href) || seen.get(href).name.length < name.length) {
-                  let stockStatus = 'unknown';
-                  if (/商品已售完|售完待補貨|庫存不足|已售完|缺貨/.test(stockText)) {
-                    stockStatus = 'sold_out';
-                  } else if (/加入購物車|尚有庫存|可購買/.test(stockText)) {
-                    stockStatus = 'in_stock';
-                  }
-                  seen.set(href, { product_url: href, catalog_id: String(catalogId), name, stock_status: stockStatus });
-                }
-              }
-              return Array.from(seen.values());
-            }
-            """
-        )
-        html = page.content()
+        products = _fetch_category_products_with_page(page, category_url)
         browser.close()
+    return products
+
+
+def _fetch_category_products_with_page(page: object, category_url: str) -> list[CategoryProduct]:
+    page.goto(category_url, wait_until="networkidle", timeout=DEFAULT_TIMEOUT_SECONDS * 1000)
+    page.wait_for_timeout(2_000)
+    items = page.locator('a[href*="/products/"]').evaluate_all(
+        """
+        (nodes) => {
+          const seen = new Map();
+          for (const node of nodes) {
+            const href = new URL(node.getAttribute('href'), window.location.origin).toString();
+            const card = node.closest('[class*="product"], [data-product-id], [data-id], li, .thumbnail') || node.parentElement || node;
+            const candidates = [
+              node.getAttribute('title'),
+              node.textContent,
+              node.querySelector('img')?.getAttribute('alt'),
+              card.textContent,
+            ]
+              .map((value) => (value || '').replace(/\\s+/g, ' ').trim())
+              .filter(Boolean);
+            const name = candidates.sort((a, b) => b.length - a.length)[0] || href.split('/').pop();
+            const stockText = (card.textContent || '').replace(/\\s+/g, ' ').trim();
+            const dataset = Object.assign({}, card.dataset || {}, node.dataset || {});
+            const catalogId = Object.values(dataset).find((value) => /^\\d+$/.test(String(value || ''))) || '';
+            if (!seen.has(href) || seen.get(href).name.length < name.length) {
+              let stockStatus = 'unknown';
+              if (/商品已售完|售完待補貨|庫存不足|已售完|缺貨/.test(stockText)) {
+                stockStatus = 'sold_out';
+              } else if (/加入購物車|尚有庫存|可購買/.test(stockText)) {
+                stockStatus = 'in_stock';
+              }
+              seen.set(href, { product_url: href, catalog_id: String(catalogId), name, stock_status: stockStatus });
+            }
+          }
+          return Array.from(seen.values());
+        }
+        """
+    )
+    html = page.content()
 
     products = [CategoryProduct(**item) for item in items]
     catalog_ids = _extract_catalog_ids_from_category_html(html)
@@ -388,6 +400,53 @@ def fetch_category_products(category_url: str) -> list[CategoryProduct]:
                 for index, product in enumerate(products)
             ]
     return products
+
+
+def fetch_product_detail_with_page(page: object, product_url: str) -> ProductDetail:
+    page.goto(product_url, wait_until="networkidle", timeout=DEFAULT_TIMEOUT_SECONDS * 1000)
+    page.wait_for_timeout(1_000)
+    payload = page.evaluate(
+        """
+        () => {
+          const text = (value) => (value || '').replace(/\\s+/g, ' ').trim();
+          const bodyText = text(document.body?.innerText || '');
+          const pickText = (selectors) => {
+            for (const selector of selectors) {
+              const element = document.querySelector(selector);
+              const value = text(element?.textContent || '');
+              if (value) return value;
+            }
+            return '';
+          };
+          const stockElement = Array.from(document.querySelectorAll('body *')).find((element) => {
+            const value = text(element.textContent || '');
+            return value.startsWith('線上庫存');
+          });
+          const actionText = Array.from(document.querySelectorAll('button, a, input[type="submit"]'))
+            .map((element) => text(element.textContent || element.value || ''))
+            .find((value) => /(加入購物車|售完待補貨|商品已售完|已售完|補貨中)/.test(value)) || '';
+          return {
+            name: pickText(['h1', '.product-title', '[class*="title"]']),
+            stock_text: text(stockElement?.textContent || ''),
+            action_text: actionText,
+            body_text: bodyText,
+          };
+        }
+        """
+    )
+    body_text = payload["body_text"]
+    product_code_match = re.search(r"商品編號\s*[:：]\s*([A-Za-z0-9-]+)", body_text)
+    price_match = re.search(r"NT\$\s*([\d,]+)", body_text)
+    return ProductDetail(
+        name=payload["name"] or body_text[:120].strip(),
+        product_code=product_code_match.group(1) if product_code_match else "",
+        price_twd=int(price_match.group(1).replace(",", "")) if price_match else None,
+        stock_status=resolve_stock_status_from_signals(
+            stock_text=payload["stock_text"],
+            action_text=payload["action_text"],
+            fallback_text=body_text,
+        ),
+    )
 
 
 def fetch_url_text(url: str) -> str:
@@ -418,9 +477,9 @@ def format_notification_message(*, events: list[ProductEvent], checked_at: str) 
         label = "新上架" if event.event_type == "new_listing" else "補貨"
         price = f"NT${event.product.price_twd:,}" if event.product.price_twd is not None else "價格未知"
         stock = {
-            "in_stock": "尚有庫存",
-            "sold_out": "已售完",
-            "unknown": "庫存未知",
+            "in_stock": "線上現貨",
+            "sold_out": "線上缺貨",
+            "unknown": "線上庫存未知",
         }[event.product.stock_status]
         lines.extend(
             [
@@ -528,18 +587,18 @@ def format_status_message(*, checked_at: str, products: list[ProductSnapshot]) -
         f"分類頁: {DEFAULT_CATEGORY_URL}",
         f"檢查時間: {checked_at}",
         f"商品總數: {len(products)}",
-        f"現貨: {in_stock}",
-        f"缺貨: {sold_out}",
-        f"庫存未知: {unknown}",
+        f"線上現貨: {in_stock}",
+        f"線上缺貨: {sold_out}",
+        f"線上庫存未知: {unknown}",
         "",
         "前 10 項商品:",
     ]
     for product in products[:10]:
         price = f"NT${product.price_twd:,}" if product.price_twd is not None else "價格未知"
         stock = {
-            "in_stock": "現貨",
-            "sold_out": "缺貨",
-            "unknown": "未知",
+            "in_stock": "線上現貨",
+            "sold_out": "線上缺貨",
+            "unknown": "線上庫存未知",
         }[product.stock_status]
         lines.extend(
             [
@@ -605,20 +664,29 @@ def _parse_stock_status(text: str) -> StockStatus:
     stock_text = _extract_primary_stock_text(text)
     if not stock_text:
         return "unknown"
-    if any(
-        keyword in stock_text
-        for keyword in ("已售完", "補貨中", "缺貨", "暫無庫存", "庫存不足", "售完待補貨")
-    ):
-        return "sold_out"
-    if any(keyword in stock_text for keyword in ("尚有庫存", "可購買", "現貨供應")):
-        return "in_stock"
-    return "unknown"
+    return resolve_stock_status_from_signals(stock_text=stock_text)
 
 
 def _merge_stock_status(*, category_stock_status: StockStatus, detail_stock_status: StockStatus) -> StockStatus:
     if category_stock_status == "sold_out" or detail_stock_status == "sold_out":
         return "sold_out"
     if category_stock_status == "in_stock" or detail_stock_status == "in_stock":
+        return "in_stock"
+    return "unknown"
+
+
+def resolve_stock_status_from_signals(
+    *,
+    stock_text: str,
+    action_text: str = "",
+    fallback_text: str = "",
+) -> StockStatus:
+    sold_out_keywords = ("已售完", "補貨中", "缺貨", "暫無庫存", "庫存不足", "售完待補貨", "商品已售完")
+    in_stock_keywords = ("尚有庫存", "可購買", "現貨供應", "加入購物車")
+    combined = " ".join(part for part in (stock_text, action_text, fallback_text) if part)
+    if any(keyword in combined for keyword in sold_out_keywords):
+        return "sold_out"
+    if any(keyword in combined for keyword in in_stock_keywords):
         return "in_stock"
     return "unknown"
 
