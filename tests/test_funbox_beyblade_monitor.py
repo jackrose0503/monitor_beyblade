@@ -243,6 +243,51 @@ class ParsingAndDiffTests(unittest.TestCase):
         self.assertEqual(summary[TRACKED_STORE_LABELS["AD311"]], "TRUE")
         self.assertEqual(summary[TRACKED_STORE_LABELS["AD316"]], "TRUE")
 
+    def test_fetch_store_inventory_rows_with_page_prefers_tracked_store_pane_over_active_non_target_pane(self) -> None:
+        page = StoreInventoryPageStub(
+            rows=[],
+            evaluate_result={
+                "pane_text": (
+                    "門市\t庫存狀態\n"
+                    "AD101崇光SOGO(Funbox Toys)\t○\n"
+                    "AD105三越南西(Funbox Toys)\t○\n"
+                ),
+                "pane_candidates": [
+                    {
+                        "text": (
+                            "門市\t庫存狀態\n"
+                            "AD101崇光SOGO(Funbox Toys)\t○\n"
+                            "AD105三越南西(Funbox Toys)\t○\n"
+                        ),
+                        "visible": True,
+                        "active": True,
+                    },
+                    {
+                        "text": (
+                            "門市\t庫存狀態\n"
+                            "AD311台南三越(Funbox Toys)\t○\n"
+                            "AD316台南遠百(Funbox Toys)\t○\n"
+                            "AD318台南西門(Funbox Toys & Sanrio Gift Gate)\t○\n"
+                            "AD331南紡購物中心(Funbox Toys)\t✕\n"
+                            "AD351台南三井(Funbox Toys)\t✕\n"
+                        ),
+                        "visible": False,
+                        "active": False,
+                    },
+                ],
+                "rows": [],
+            },
+        )
+
+        rows = _fetch_store_inventory_rows_with_page(page)
+        summary = _summarize_store_inventory_rows(rows)
+
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD318"]], "TRUE")
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD331"]], "FALSE")
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD351"]], "FALSE")
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD311"]], "TRUE")
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD316"]], "TRUE")
+
     def test_summarize_store_inventory_rows_groups_tracked_stores_and_other(self) -> None:
         summary = _summarize_store_inventory_rows(
             [
@@ -728,6 +773,7 @@ class LazyNotifierTests(unittest.TestCase):
         self.assertIn("- 其他: 🔴 請直接上官網查詢", message)
         self.assertIn("價格: NT$550", message)
         self.assertIn("連結: https://shop.funbox.com.tw/products/bb93952", message)
+        self.assertNotIn("[新上架]", message)
         self.assertNotIn("商品品項:", message)
 
 

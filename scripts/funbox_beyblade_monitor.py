@@ -512,15 +512,16 @@ def fetch_url_text(url: str) -> str:
 
 def format_notification_message(*, events: list[ProductEvent], checked_at: str) -> str:
     display_checked_at = _format_display_timestamp(checked_at)
+    new_listing_count = sum(1 for event in events if event.event_type == "new_listing")
+    restock_count = sum(1 for event in events if event.event_type == "restock")
     lines = [
         f"Funbox Beyblade 監控通知",
         f"檢查時間: {display_checked_at}",
         f"事件數量: {len(events)}",
+        f"異動統計: 新上架 {new_listing_count} | 補貨 {restock_count}",
         "",
     ]
     for event in events:
-        label = "新上架" if event.event_type == "new_listing" else "補貨"
-        lines.append(f"[{label}] {event.product.name}")
         lines.extend(_format_product_lines(event.product))
         lines.append("")
     return "\n".join(lines).strip()
@@ -739,6 +740,14 @@ def _fetch_store_inventory_rows_with_page(page: object) -> list[dict[str, str]]:
           const text = (value) => (value || '').replace(/\\s+/g, ' ').trim();
           const visible = (element) =>
             Boolean(element && (element.offsetWidth || element.offsetHeight || element.getClientRects().length));
+          const paneCandidates = Array.from(document.querySelectorAll('[id*="inventory_quantities_tab_content"], .tab-pane'))
+            .map((element) => ({
+              id: element.id || '',
+              text: element.innerText || element.textContent || '',
+              visible: visible(element),
+              active: element.classList.contains('active'),
+            }))
+            .filter((candidate) => /AD\\d{3}/.test(text(candidate.text || '')));
           const activePane =
             Array.from(document.querySelectorAll('[id*="inventory_quantities_tab_content"].active, .tab-pane.active'))
               .find((element) => visible(element) && /AD\\d{3}/.test(text(element.textContent || ''))) ||
@@ -786,6 +795,7 @@ def _fetch_store_inventory_rows_with_page(page: object) -> list[dict[str, str]]:
 
           return {
             pane_text: paneText,
+            pane_candidates: paneCandidates,
             rows: Array.from(seen.values()),
           };
         }
@@ -796,12 +806,41 @@ def _fetch_store_inventory_rows_with_page(page: object) -> list[dict[str, str]]:
     if not isinstance(payload, dict):
         return []
 
-    text_rows = _extract_store_inventory_rows_from_text(str(payload.get("pane_text", "")))
+    selected_pane_text = _select_store_inventory_pane_text(payload)
+    text_rows = _extract_store_inventory_rows_from_text(selected_pane_text)
     if text_rows:
         return text_rows
 
     fallback_rows = payload.get("rows")
     return fallback_rows if isinstance(fallback_rows, list) else []
+
+
+def _select_store_inventory_pane_text(payload: dict[str, object]) -> str:
+    candidates = payload.get("pane_candidates")
+    best_text = ""
+    best_score = (-1, -1, -1, -1, -1)
+    if isinstance(candidates, list):
+        for candidate in candidates:
+            if not isinstance(candidate, dict):
+                continue
+            text_blob = str(candidate.get("text", ""))
+            if not re.search(r"AD\d{3}", text_blob):
+                continue
+            tracked_hits = sum(1 for code in TRACKED_STORE_LABELS if code in text_blob)
+            total_codes = len(set(re.findall(r"AD\d{3}", text_blob)))
+            score = (
+                tracked_hits,
+                int(bool(candidate.get("visible"))),
+                int(bool(candidate.get("active"))),
+                total_codes,
+                len(text_blob),
+            )
+            if score > best_score:
+                best_score = score
+                best_text = text_blob
+    if best_text:
+        return best_text
+    return str(payload.get("pane_text", ""))
 
 
 def _extract_store_inventory_rows_from_text(text_blob: str) -> list[dict[str, str]]:
