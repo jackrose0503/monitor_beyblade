@@ -215,6 +215,45 @@ class ParsingAndDiffTests(unittest.TestCase):
         self.assertEqual(summary[TRACKED_STORE_LABELS["AD316"]], "TRUE")
         self.assertEqual(summary[OTHER_STORE_LABEL], "TRUE")
 
+    def test_summarize_store_inventory_rows_detects_sold_out_from_icon_html(self) -> None:
+        summary = _summarize_store_inventory_rows(
+            [
+                {
+                    "store_text": "AD331南紡購物中心(Funbox Toys)",
+                    "status_text": "",
+                    "row_html": '<td class="inventory-status text-danger"><i class="fa fa-times"></i></td>',
+                }
+            ]
+        )
+
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD331"]], "FALSE")
+
+    def test_summarize_store_inventory_rows_detects_in_stock_from_icon_html(self) -> None:
+        summary = _summarize_store_inventory_rows(
+            [
+                {
+                    "store_text": "AD351台南三井(Funbox Toys)",
+                    "status_text": "",
+                    "row_html": '<td class="inventory-status text-success"><i class="fa fa-circle"></i></td>',
+                }
+            ]
+        )
+
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD351"]], "TRUE")
+
+    def test_summarize_store_inventory_rows_prefers_status_cell_html_over_row_text(self) -> None:
+        summary = _summarize_store_inventory_rows(
+            [
+                {
+                    "store_text": "AD316台南遠百(Funbox Toys) 缺貨中",
+                    "status_text": "",
+                    "row_html": '<td class="inventory-status text-success"><i class="fa fa-circle"></i></td>',
+                }
+            ]
+        )
+
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD316"]], "TRUE")
+
     def test_parse_product_detail_extracts_core_fields(self) -> None:
         detail = parse_product_detail(DETAIL_HTML_IN_STOCK)
 
@@ -239,6 +278,15 @@ class ParsingAndDiffTests(unittest.TestCase):
 
     def test_resolve_stock_status_from_signals_treats_hot_selling_as_in_stock(self) -> None:
         status = resolve_stock_status_from_signals(stock_text="熱賣中")
+
+        self.assertEqual(status, "in_stock")
+
+    def test_resolve_stock_status_from_signals_prefers_add_to_cart_capability(self) -> None:
+        status = resolve_stock_status_from_signals(
+            stock_text="庫存不足",
+            action_text="加入購物車",
+            can_add_to_cart=True,
+        )
 
         self.assertEqual(status, "in_stock")
 

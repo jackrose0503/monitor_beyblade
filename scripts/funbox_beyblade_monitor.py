@@ -434,6 +434,17 @@ def fetch_product_detail_with_page(page: object, product_url: str) -> ProductDet
         """
         () => {
           const text = (value) => (value || '').replace(/\\s+/g, ' ').trim();
+          const visible = (element) =>
+            Boolean(element && (element.offsetWidth || element.offsetHeight || element.getClientRects().length));
+          const disabled = (element) => {
+            if (!element) return true;
+            const classText = String(element.className || '');
+            return (
+              element.hasAttribute?.('disabled') ||
+              element.getAttribute?.('aria-disabled') === 'true' ||
+              /disabled|is-disabled|btn-disabled/.test(classText)
+            );
+          };
           const bodyText = text(document.body?.innerText || '');
           const pickText = (selectors) => {
             for (const selector of selectors) {
@@ -450,10 +461,16 @@ def fetch_product_detail_with_page(page: object, product_url: str) -> ProductDet
           const actionText = Array.from(document.querySelectorAll('button, a, input[type="submit"]'))
             .map((element) => text(element.textContent || element.value || ''))
             .find((value) => /(加入購物車|售完待補貨|商品已售完|已售完|補貨中)/.test(value)) || '';
+          const canAddToCart = Array.from(document.querySelectorAll('button, a, input[type="submit"], input[type="button"]'))
+            .some((element) => {
+              const value = text(element.textContent || element.value || '');
+              return /加入購物車/.test(value) && visible(element) && !disabled(element);
+            });
           return {
             name: pickText(['h1', '.product-title', '[class*="title"]']),
             stock_text: text(stockElement?.textContent || ''),
             action_text: actionText,
+            can_add_to_cart: canAddToCart,
             body_text: bodyText,
           };
         }
@@ -469,6 +486,7 @@ def fetch_product_detail_with_page(page: object, product_url: str) -> ProductDet
         stock_status=resolve_stock_status_from_signals(
             stock_text=payload["stock_text"],
             action_text=payload["action_text"],
+            can_add_to_cart=bool(payload.get("can_add_to_cart")),
             fallback_text=body_text,
         ),
         store_inventory=_summarize_store_inventory_rows(store_rows),
@@ -736,17 +754,31 @@ def _fetch_store_inventory_rows_with_page(page: object) -> list[dict[str, str]]:
           const seen = new Map();
           for (const element of storeElements) {
             const value = text(element.textContent || '');
-            const match = value.match(/(AD\\d{3}[^○△✕×]*?)(?:\\s+|)([○△✕×]|熱賣中|即將完售|缺貨中|缺貨|售完|無庫存)?/);
-            if (!match) continue;
-            const storeText = text(match[1]);
-            const statusText = text(match[2] || '');
+            const cells = Array.from(element.querySelectorAll('th, td')).filter((cell) => visible(cell));
+            let storeText = '';
+            let statusText = '';
+            let statusHtml = '';
+
+            if (cells.length >= 2 && /AD\\d{3}/.test(text(cells[0].textContent || ''))) {
+              storeText = text(cells[0].textContent || '');
+              const statusCell = cells[cells.length - 1];
+              statusText = text(statusCell.textContent || '');
+              statusHtml = statusCell.innerHTML || '';
+            } else {
+              const match = value.match(/(AD\\d{3}[^○△✕×]*?)(?:\\s+|)([○△✕×]|熱賣中|即將完售|缺貨中|缺貨|售完|無庫存)?/);
+              if (!match) continue;
+              storeText = text(match[1]);
+              statusText = text(match[2] || '');
+              statusHtml = element.innerHTML || '';
+            }
+
             const storeCodeMatch = storeText.match(/AD\\d{3}/);
             const key = storeCodeMatch ? storeCodeMatch[0] : storeText;
             if (!seen.has(key)) {
               seen.set(key, {
                 store_text: storeText,
                 status_text: statusText,
-                row_html: element.innerHTML || '',
+                row_html: statusHtml,
               });
             }
           }
@@ -842,7 +874,6 @@ def _resolve_store_inventory_status(
     sold_out_keywords = (
         "✕",
         "×",
-        "x",
         "缺貨中",
         "缺貨",
         "售完",
@@ -851,6 +882,12 @@ def _resolve_store_inventory_status(
         "sold-out",
         "outofstock",
         "out-of-stock",
+        "fa-times",
+        "fa-close",
+        "text-danger",
+        "status-danger",
+        "inventory-status-danger",
+        "text-red",
     )
     available_keywords = (
         "○",
@@ -862,6 +899,14 @@ def _resolve_store_inventory_status(
         "available",
         "instock",
         "in-stock",
+        "fa-circle",
+        "fa-dot-circle",
+        "text-success",
+        "status-success",
+        "inventory-status-success",
+        "text-warning",
+        "status-warning",
+        "inventory-status-warning",
     )
     if any(keyword in combined for keyword in sold_out_keywords):
         return "FALSE"
@@ -954,11 +999,14 @@ def resolve_stock_status_from_signals(
     *,
     stock_text: str,
     action_text: str = "",
+    can_add_to_cart: bool = False,
     fallback_text: str = "",
 ) -> StockStatus:
     sold_out_keywords = ("已售完", "補貨中", "缺貨", "暫無庫存", "庫存不足", "售完待補貨", "商品已售完")
-    in_stock_keywords = ("尚有庫存", "可購買", "現貨供應", "加入購物車", "熱賣中", "即將完售")
+    in_stock_keywords = ("尚有庫存", "可購買", "現貨供應", "熱賣中", "即將完售")
     combined = " ".join(part for part in (stock_text, action_text, fallback_text) if part)
+    if can_add_to_cart:
+        return "in_stock"
     if any(keyword in combined for keyword in sold_out_keywords):
         return "sold_out"
     if any(keyword in combined for keyword in in_stock_keywords):
