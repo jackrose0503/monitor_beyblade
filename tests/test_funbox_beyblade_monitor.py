@@ -12,6 +12,7 @@ from scripts.funbox_beyblade_monitor import (
     NotificationError,
     ProductSnapshot,
     TRACKED_STORE_LABELS,
+    _extract_store_inventory_rows_from_text,
     _fetch_store_inventory_rows_with_page,
     _split_csv_values,
     _summarize_store_inventory_rows,
@@ -109,6 +110,51 @@ def make_snapshot(
 
 
 class ParsingAndDiffTests(unittest.TestCase):
+    def test_extract_store_inventory_rows_from_text_parses_south_region_inventory_table(self) -> None:
+        rows = _extract_store_inventory_rows_from_text(
+            """
+            庫存狀態僅供參考 實際數量以現場為主
+            如需前往門市購買,請先電話確認有庫存再行前往。 ○：熱賣中 ｜ △：即將完售 ｜ ✕：缺貨中
+            北區
+            中區
+            南區
+            東區
+            門市\t庫存狀態
+            AD207嘉義遠東(Funbox Toys)\t○
+            AD209嘉義耐斯(Funbox Toys)\t○
+            AD210嘉義三越(Funbox Toys)\t○
+            AD303新光高雄(Funbox Toys)\t✕
+            AD308高雄漢神(Funbox Toys)\t○
+            AD310崇光高雄(Funbox Toys)\t○
+            AD311台南三越(Funbox Toys)\t○
+            AD312屏東太平洋(Funbox Toys)\t○
+            AD316台南遠百(Funbox Toys)\t○
+            AD317高雄大遠百(Funbox Toys)\t○
+            AD318台南西門(Funbox Toys & Sanrio Gift Gate)\t○
+            AD320漢神巨蛋(Funbox Toys)\t✕
+            AD321高雄左營(Funbox Toys)\t○
+            AD323夢時代2館(Funbox Toys)\t✕
+            AD325屏東環球(Funbox Toys)\t○
+            AD330義大世界(Funbox Toys)\t✕
+            AD331南紡購物中心(Funbox Toys)\t✕
+            AD335昇恆昌澎湖(Funbox Toys)\t○
+            AD336高雄大立(Funbox Toys)\t○
+            AD337義大二館(Funbox Toys)\t○
+            AD338義享天地(Funbox Toys)\t○
+            AD350大魯閣新光(Funbox Toys)\t○
+            AD351台南三井(Funbox Toys)\t✕
+            """
+        )
+
+        summary = _summarize_store_inventory_rows(rows)
+
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD318"]], "TRUE")
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD331"]], "FALSE")
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD351"]], "FALSE")
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD311"]], "TRUE")
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD316"]], "TRUE")
+        self.assertEqual(summary[OTHER_STORE_LABEL], "TRUE")
+
     def test_fetch_store_inventory_rows_with_page_opens_modal_and_switches_to_south(self) -> None:
         page = StoreInventoryPageStub(
             rows=[
@@ -171,6 +217,31 @@ class ParsingAndDiffTests(unittest.TestCase):
             ('a[role="tab"]:has-text("南區"):not([id^="mobile_"])', 0),
             page.clicked_selectors,
         )
+
+    def test_fetch_store_inventory_rows_with_page_prefers_active_pane_text(self) -> None:
+        page = StoreInventoryPageStub(
+            rows=[],
+            evaluate_result={
+                "pane_text": (
+                    "門市\t庫存狀態\n"
+                    "AD311台南三越(Funbox Toys)\t○\n"
+                    "AD316台南遠百(Funbox Toys)\t○\n"
+                    "AD318台南西門(Funbox Toys & Sanrio Gift Gate)\t○\n"
+                    "AD331南紡購物中心(Funbox Toys)\t✕\n"
+                    "AD351台南三井(Funbox Toys)\t✕\n"
+                ),
+                "rows": [],
+            },
+        )
+
+        rows = _fetch_store_inventory_rows_with_page(page)
+        summary = _summarize_store_inventory_rows(rows)
+
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD318"]], "TRUE")
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD331"]], "FALSE")
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD351"]], "FALSE")
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD311"]], "TRUE")
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD316"]], "TRUE")
 
     def test_summarize_store_inventory_rows_groups_tracked_stores_and_other(self) -> None:
         summary = _summarize_store_inventory_rows(
@@ -418,6 +489,7 @@ class StoreInventoryPageStub:
         *,
         rows: list[dict[str, str]],
         selector_visibility: dict[str, list[bool]] | None = None,
+        evaluate_result: object | None = None,
     ) -> None:
         self.selector_visibility = selector_visibility or {
             'text=門市庫存狀態查詢': [True],
@@ -426,6 +498,7 @@ class StoreInventoryPageStub:
         }
         self.clicked_selectors: list[tuple[str, int]] = []
         self.rows = rows
+        self.evaluate_result = evaluate_result
 
     def locator(self, selector: str) -> StubLocator:
         return StubLocator(self, selector)
@@ -434,6 +507,8 @@ class StoreInventoryPageStub:
         return None
 
     def evaluate(self, _script: str) -> list[dict[str, str]]:
+        if self.evaluate_result is not None:
+            return self.evaluate_result
         return self.rows
 
 

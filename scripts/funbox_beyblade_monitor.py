@@ -733,7 +733,7 @@ def _fetch_store_inventory_rows_with_page(page: object) -> list[dict[str, str]]:
         south_tab.click()
         page.wait_for_timeout(500)
 
-    return page.evaluate(
+    payload = page.evaluate(
         """
         () => {
           const text = (value) => (value || '').replace(/\\s+/g, ' ').trim();
@@ -745,6 +745,7 @@ def _fetch_store_inventory_rows_with_page(page: object) -> list[dict[str, str]]:
             Array.from(document.querySelectorAll('[id*="inventory_quantities_tab_content"], .tab-pane'))
               .find((element) => visible(element) && /AD\\d{3}/.test(text(element.textContent || ''))) ||
             document.body;
+          const paneText = activePane ? (activePane.innerText || activePane.textContent || '') : '';
           const storeElements = Array.from(activePane.querySelectorAll('tr, li, .row, [class*="inventory"], [class*="store"]'))
             .filter((element) => {
               if (!visible(element)) return false;
@@ -783,10 +784,70 @@ def _fetch_store_inventory_rows_with_page(page: object) -> list[dict[str, str]]:
             }
           }
 
-          return Array.from(seen.values());
+          return {
+            pane_text: paneText,
+            rows: Array.from(seen.values()),
+          };
         }
         """
     )
+    if isinstance(payload, list):
+        return payload
+    if not isinstance(payload, dict):
+        return []
+
+    text_rows = _extract_store_inventory_rows_from_text(str(payload.get("pane_text", "")))
+    if text_rows:
+        return text_rows
+
+    fallback_rows = payload.get("rows")
+    return fallback_rows if isinstance(fallback_rows, list) else []
+
+
+def _extract_store_inventory_rows_from_text(text_blob: str) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    seen_store_codes: set[str] = set()
+    if not text_blob.strip():
+        return rows
+
+    status_pattern = r"(○|△|✕|×|熱賣中|即將完售|缺貨中|缺貨|售完|無庫存)"
+    lines = [line.strip() for line in text_blob.splitlines() if line.strip()]
+    index = 0
+    while index < len(lines):
+        line = re.sub(r"\s+", " ", lines[index]).strip()
+        if not re.search(r"AD\d{3}", line):
+            index += 1
+            continue
+
+        status_match = re.search(rf"{status_pattern}\s*$", line)
+        store_text = line
+        status_text = ""
+
+        if status_match is not None:
+            store_text = line[: status_match.start()].strip()
+            status_text = status_match.group(1)
+        elif index + 1 < len(lines):
+            next_line = re.sub(r"\s+", " ", lines[index + 1]).strip()
+            if re.fullmatch(status_pattern, next_line):
+                status_text = next_line
+                index += 1
+
+        store_code = _extract_store_code(store_text)
+        if store_code is None or store_code in seen_store_codes:
+            index += 1
+            continue
+
+        rows.append(
+            {
+                "store_text": store_text,
+                "status_text": status_text,
+                "row_html": "",
+            }
+        )
+        seen_store_codes.add(store_code)
+        index += 1
+
+    return rows
 
 
 def _first_present_locator(page: object, selectors: list[str]) -> object | None:
