@@ -131,7 +131,7 @@ class JsonStateStore:
 class EnvNotifier:
     def __init__(self) -> None:
         self.telegram_bot_token = _require_env("TELEGRAM_BOT_TOKEN")
-        self.telegram_chat_id = _require_env("TELEGRAM_CHAT_ID")
+        self.telegram_chat_ids = _split_csv_values(_require_env("TELEGRAM_CHAT_ID"))
         self.smtp_host = _require_env("SMTP_HOST")
         self.smtp_port = int(_require_env("SMTP_PORT"))
         self.smtp_username = _require_env("SMTP_USERNAME")
@@ -151,16 +151,23 @@ class EnvNotifier:
     def _send_telegram(self, message: str) -> None:
         _require_requests()
         url = f"https://api.telegram.org/bot{self.telegram_bot_token}/sendMessage"
-        response = requests.post(
-            url,
-            json={
-                "chat_id": self.telegram_chat_id,
-                "text": message,
-                "disable_web_page_preview": True,
-            },
-            timeout=DEFAULT_TIMEOUT_SECONDS,
-        )
-        response.raise_for_status()
+        errors: list[str] = []
+        for chat_id in self.telegram_chat_ids:
+            response = requests.post(
+                url,
+                json={
+                    "chat_id": chat_id,
+                    "text": message,
+                    "disable_web_page_preview": True,
+                },
+                timeout=DEFAULT_TIMEOUT_SECONDS,
+            )
+            try:
+                response.raise_for_status()
+            except Exception as exc:
+                errors.append(f"{chat_id}: {exc}")
+        if errors:
+            raise NotificationError("; ".join(errors))
 
     def _send_email(self, message: str) -> None:
         email = EmailMessage()
@@ -595,6 +602,10 @@ def _require_env(key: str) -> str:
     if not value:
         raise RuntimeError(f"Missing required environment variable: {key}")
     return value
+
+
+def _split_csv_values(value: str) -> list[str]:
+    return [item.strip() for item in value.split(",") if item.strip()]
 
 
 def _require_requests() -> None:

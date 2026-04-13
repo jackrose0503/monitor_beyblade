@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import MagicMock, patch
 
 from scripts.funbox_beyblade_monitor import (
+    EnvNotifier,
     MonitorRunner,
     MonitorState,
     NotificationError,
     ProductSnapshot,
+    _split_csv_values,
     build_lazy_notification_sender,
     build_next_state,
     diff_products,
@@ -341,3 +344,35 @@ class CliArgumentTests(unittest.TestCase):
         args = parse_args(["--send-status-report"])
 
         self.assertTrue(args.send_status_report)
+
+
+class RecipientParsingTests(unittest.TestCase):
+    def test_split_csv_values_handles_multiple_chat_ids(self) -> None:
+        self.assertEqual(_split_csv_values("12345, -10098765"), ["12345", "-10098765"])
+
+    @patch("scripts.funbox_beyblade_monitor.requests.post")
+    def test_env_notifier_sends_telegram_to_multiple_chat_ids(self, post: MagicMock) -> None:
+        response = MagicMock()
+        response.raise_for_status.return_value = None
+        post.return_value = response
+
+        with patch.dict(
+            "os.environ",
+            {
+                "TELEGRAM_BOT_TOKEN": "token",
+                "TELEGRAM_CHAT_ID": "12345,-10098765",
+                "SMTP_HOST": "smtp.example.com",
+                "SMTP_PORT": "587",
+                "SMTP_USERNAME": "user",
+                "SMTP_PASSWORD": "pass",
+                "EMAIL_FROM": "from@example.com",
+                "EMAIL_TO": "to@example.com",
+            },
+            clear=False,
+        ):
+            notifier = EnvNotifier()
+            notifier._send_telegram("hello")
+
+        self.assertEqual(post.call_count, 2)
+        self.assertEqual(post.call_args_list[0].kwargs["json"]["chat_id"], "12345")
+        self.assertEqual(post.call_args_list[1].kwargs["json"]["chat_id"], "-10098765")

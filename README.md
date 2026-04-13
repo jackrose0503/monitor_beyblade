@@ -21,6 +21,7 @@
 - `EMAIL_TO`
 
 可先參考 [.env.example](./.env.example) 的欄位名稱與格式。
+`TELEGRAM_CHAT_ID` 可填單一 chat id，或用逗號分隔多個 chat id，例如 `123456789,-1001234567890`，就能同時通知私訊與群組。
 
 ## Workflow Behavior
 
