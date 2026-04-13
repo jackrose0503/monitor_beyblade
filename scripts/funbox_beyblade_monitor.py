@@ -421,6 +421,7 @@ def _fetch_category_products_with_page(page: object, category_url: str) -> list[
 def fetch_product_detail_with_page(page: object, product_url: str) -> ProductDetail:
     page.goto(product_url, wait_until="networkidle", timeout=DEFAULT_TIMEOUT_SECONDS * 1000)
     page.wait_for_timeout(1_000)
+    store_rows = _fetch_store_inventory_rows_with_page(page)
     payload = page.evaluate(
         """
         () => {
@@ -445,22 +446,6 @@ def fetch_product_detail_with_page(page: object, product_url: str) -> ProductDet
             name: pickText(['h1', '.product-title', '[class*="title"]']),
             stock_text: text(stockElement?.textContent || ''),
             action_text: actionText,
-            store_rows: Array.from(document.querySelectorAll('tr'))
-              .map((row) => {
-                const cells = Array.from(row.querySelectorAll('th, td'));
-                if (cells.length < 2) return null;
-                const storeText = text(cells[0]?.textContent || '');
-                const statusCell = cells[1];
-                const statusText = text(statusCell?.textContent || '');
-                const rowText = text(row.textContent || '');
-                if (!storeText || storeText === '門市' || !/AD\\d{3}/.test(rowText)) return null;
-                return {
-                  store_text: storeText,
-                  status_text: statusText,
-                  row_html: statusCell?.innerHTML || '',
-                };
-              })
-              .filter(Boolean),
             body_text: bodyText,
           };
         }
@@ -478,7 +463,7 @@ def fetch_product_detail_with_page(page: object, product_url: str) -> ProductDet
             action_text=payload["action_text"],
             fallback_text=body_text,
         ),
-        store_inventory=_summarize_store_inventory_rows(payload.get("store_rows", [])),
+        store_inventory=_summarize_store_inventory_rows(store_rows),
     )
 
 
@@ -682,6 +667,77 @@ def _format_store_inventory_lines(
     ]
     lines.append(f"{OTHER_STORE_LABEL}: {normalized[OTHER_STORE_LABEL]}（請直接上官網查詢）")
     return lines
+
+
+def _fetch_store_inventory_rows_with_page(page: object) -> list[dict[str, str]]:
+    inventory_trigger = _first_present_locator(
+        page,
+        [
+            'text=門市庫存狀態查詢',
+            'a[href*="inventory_quantities"]',
+        ],
+    )
+    if inventory_trigger is None:
+        return []
+
+    inventory_trigger.click()
+    page.wait_for_timeout(500)
+
+    south_tab = _first_present_locator(
+        page,
+        [
+            'text=南區',
+            'button:has-text("南區")',
+            '[role="tab"]:has-text("南區")',
+        ],
+    )
+    if south_tab is not None:
+        south_tab.click()
+        page.wait_for_timeout(500)
+
+    return page.evaluate(
+        """
+        () => {
+          const text = (value) => (value || '').replace(/\\s+/g, ' ').trim();
+          const visible = (element) =>
+            Boolean(element && (element.offsetWidth || element.offsetHeight || element.getClientRects().length));
+
+          const storeElements = Array.from(document.querySelectorAll('body *')).filter((element) => {
+            if (!visible(element)) return false;
+            const value = text(element.textContent || '');
+            return /AD\\d{3}/.test(value) && /[○△✕×]|熱賣中|即將完售|缺貨中|缺貨|售完|無庫存/.test(value);
+          });
+
+          const seen = new Map();
+          for (const element of storeElements) {
+            const value = text(element.textContent || '');
+            const match = value.match(/(AD\\d{3}[^○△✕×]*?)(?:\\s+|)([○△✕×]|熱賣中|即將完售|缺貨中|缺貨|售完|無庫存)/);
+            if (!match) continue;
+            const storeText = text(match[1]);
+            const statusText = text(match[2]);
+            const storeCodeMatch = storeText.match(/AD\\d{3}/);
+            const key = storeCodeMatch ? storeCodeMatch[0] : storeText;
+            if (!seen.has(key)) {
+              seen.set(key, {
+                store_text: storeText,
+                status_text: statusText,
+                row_html: element.innerHTML || '',
+              });
+            }
+          }
+
+          return Array.from(seen.values());
+        }
+        """
+    )
+
+
+def _first_present_locator(page: object, selectors: list[str]) -> object | None:
+    for selector in selectors:
+        locator = page.locator(selector)
+        if locator.count():
+            return locator.first
+    return None
 
 
 def _default_store_inventory_summary() -> dict[str, StoreInventoryStatus]:

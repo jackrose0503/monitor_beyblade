@@ -12,6 +12,7 @@ from scripts.funbox_beyblade_monitor import (
     NotificationError,
     ProductSnapshot,
     TRACKED_STORE_LABELS,
+    _fetch_store_inventory_rows_with_page,
     _split_csv_values,
     _summarize_store_inventory_rows,
     build_lazy_notification_sender,
@@ -108,6 +109,25 @@ def make_snapshot(
 
 
 class ParsingAndDiffTests(unittest.TestCase):
+    def test_fetch_store_inventory_rows_with_page_opens_modal_and_switches_to_south(self) -> None:
+        page = StoreInventoryPageStub(
+            rows=[
+                {
+                    "store_text": "AD331南紡購物中心(Funbox Toys)",
+                    "status_text": "✕",
+                    "row_html": "",
+                }
+            ]
+        )
+
+        rows = _fetch_store_inventory_rows_with_page(page)
+
+        self.assertEqual(
+            page.clicked_selectors,
+            ['text=門市庫存狀態查詢', 'text=南區'],
+        )
+        self.assertEqual(rows[0]["store_text"], "AD331南紡購物中心(Funbox Toys)")
+
     def test_summarize_store_inventory_rows_groups_tracked_stores_and_other(self) -> None:
         summary = _summarize_store_inventory_rows(
             [
@@ -270,6 +290,42 @@ class StubNotifier:
         self.sent.append((channel, tuple(message.splitlines())))
         if channel in self.fail_channels:
             raise NotificationError(f"{channel} failed")
+
+
+class StubLocator:
+    def __init__(self, page: "StoreInventoryPageStub", selector: str) -> None:
+        self.page = page
+        self.selector = selector
+
+    def count(self) -> int:
+        return 1 if self.selector in self.page.present_selectors else 0
+
+    @property
+    def first(self) -> "StubLocator":
+        return self
+
+    def click(self) -> None:
+        self.page.clicked_selectors.append(self.selector)
+
+
+class StoreInventoryPageStub:
+    def __init__(self, *, rows: list[dict[str, str]]) -> None:
+        self.present_selectors = {
+            'text=門市庫存狀態查詢',
+            'a[href*="inventory_quantities"]',
+            'text=南區',
+        }
+        self.clicked_selectors: list[str] = []
+        self.rows = rows
+
+    def locator(self, selector: str) -> StubLocator:
+        return StubLocator(self, selector)
+
+    def wait_for_timeout(self, _milliseconds: int) -> None:
+        return None
+
+    def evaluate(self, _script: str) -> list[dict[str, str]]:
+        return self.rows
 
 
 class MonitorRunnerTests(unittest.TestCase):
