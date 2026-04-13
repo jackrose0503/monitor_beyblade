@@ -5,8 +5,8 @@ import json
 import os
 import re
 import smtplib
-from dataclasses import asdict, dataclass, replace
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass, field, replace
+from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from html import unescape
 from pathlib import Path
@@ -30,8 +30,19 @@ except ImportError:  # pragma: no cover - optional at test time
 DEFAULT_CATEGORY_URL = "https://shop.funbox.com.tw/categories/takaratomy/beyblade"
 DEFAULT_STATE_FILE = "monitor-state/state/funbox-beyblade.json"
 DEFAULT_TIMEOUT_SECONDS = 30
+DISPLAY_TIMEZONE = timezone(timedelta(hours=8))
 
 StockStatus = Literal["in_stock", "sold_out", "unknown"]
+StoreInventoryStatus = Literal["TRUE", "FALSE", "UNKNOWN"]
+
+TRACKED_STORE_LABELS = {
+    "AD318": "AD318台南西門(Funbox Toys & Sanrio Gift Gate)",
+    "AD331": "AD331南紡購物中心(Funbox Toys)",
+    "AD351": "AD351台南三井(Funbox Toys)",
+    "AD311": "AD311台南三越(Funbox Toys)",
+    "AD316": "AD316台南遠百(Funbox Toys)",
+}
+OTHER_STORE_LABEL = "其他"
 
 
 @dataclass(frozen=True)
@@ -48,6 +59,7 @@ class ProductDetail:
     product_code: str
     price_twd: int | None
     stock_status: StockStatus
+    store_inventory: dict[str, StoreInventoryStatus] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -60,6 +72,7 @@ class ProductSnapshot:
     stock_status: StockStatus
     first_seen_at: str
     last_seen_at: str
+    store_inventory: dict[str, StoreInventoryStatus] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, payload: dict[str, object]) -> "ProductSnapshot":
@@ -70,6 +83,7 @@ class ProductSnapshot:
             name=str(payload["name"]),
             price_twd=int(payload["price_twd"]) if payload.get("price_twd") is not None else None,
             stock_status=_normalize_stock_status(str(payload.get("stock_status", "unknown"))),
+            store_inventory=_normalize_store_inventory_summary(payload.get("store_inventory")),
             first_seen_at=str(payload["first_seen_at"]),
             last_seen_at=str(payload["last_seen_at"]),
         )
@@ -299,6 +313,7 @@ def parse_product_detail(html: str) -> ProductDetail:
         product_code=product_code,
         price_twd=price_twd,
         stock_status=stock_status,
+        store_inventory=_default_store_inventory_summary(),
     )
 
 
@@ -337,6 +352,7 @@ def build_product_snapshot(
         stock_status=stock_status,
         first_seen_at="",
         last_seen_at="",
+        store_inventory=detail.store_inventory,
     )
 
 
@@ -429,6 +445,22 @@ def fetch_product_detail_with_page(page: object, product_url: str) -> ProductDet
             name: pickText(['h1', '.product-title', '[class*="title"]']),
             stock_text: text(stockElement?.textContent || ''),
             action_text: actionText,
+            store_rows: Array.from(document.querySelectorAll('tr'))
+              .map((row) => {
+                const cells = Array.from(row.querySelectorAll('th, td'));
+                if (cells.length < 2) return null;
+                const storeText = text(cells[0]?.textContent || '');
+                const statusCell = cells[1];
+                const statusText = text(statusCell?.textContent || '');
+                const rowText = text(row.textContent || '');
+                if (!storeText || storeText === '門市' || !/AD\\d{3}/.test(rowText)) return null;
+                return {
+                  store_text: storeText,
+                  status_text: statusText,
+                  row_html: statusCell?.innerHTML || '',
+                };
+              })
+              .filter(Boolean),
             body_text: bodyText,
           };
         }
@@ -446,6 +478,7 @@ def fetch_product_detail_with_page(page: object, product_url: str) -> ProductDet
             action_text=payload["action_text"],
             fallback_text=body_text,
         ),
+        store_inventory=_summarize_store_inventory_rows(payload.get("store_rows", [])),
     )
 
 
@@ -467,31 +500,18 @@ def fetch_url_text(url: str) -> str:
 
 
 def format_notification_message(*, events: list[ProductEvent], checked_at: str) -> str:
+    display_checked_at = _format_display_timestamp(checked_at)
     lines = [
         f"Funbox Beyblade 監控通知",
-        f"檢查時間: {checked_at}",
+        f"檢查時間: {display_checked_at}",
         f"事件數量: {len(events)}",
         "",
     ]
     for event in events:
         label = "新上架" if event.event_type == "new_listing" else "補貨"
-        price = f"NT${event.product.price_twd:,}" if event.product.price_twd is not None else "價格未知"
-        stock = {
-            "in_stock": "線上現貨",
-            "sold_out": "線上缺貨",
-            "unknown": "線上庫存未知",
-        }[event.product.stock_status]
-        lines.extend(
-            [
-                f"[{label}] {event.product.name}",
-                f"商品編號: {event.product.product_code or '未知'}",
-                f"分類商品 ID: {event.product.catalog_id or '未知'}",
-                f"價格: {price}",
-                f"庫存: {stock}",
-                f"連結: {event.product.product_url}",
-                "",
-            ]
-        )
+        lines.append(f"[{label}]")
+        lines.extend(_format_product_lines(event.product))
+        lines.append("")
     return "\n".join(lines).strip()
 
 
@@ -579,13 +599,14 @@ def run_send_status_report(
 
 
 def format_status_message(*, checked_at: str, products: list[ProductSnapshot]) -> str:
+    display_checked_at = _format_display_timestamp(checked_at)
     in_stock = sum(1 for product in products if product.stock_status == "in_stock")
     sold_out = sum(1 for product in products if product.stock_status == "sold_out")
     unknown = sum(1 for product in products if product.stock_status == "unknown")
     lines = [
         "Funbox Beyblade 目前網站狀態",
         f"分類頁: {DEFAULT_CATEGORY_URL}",
-        f"檢查時間: {checked_at}",
+        f"檢查時間: {display_checked_at}",
         f"商品總數: {len(products)}",
         f"線上現貨: {in_stock}",
         f"線上缺貨: {sold_out}",
@@ -594,19 +615,7 @@ def format_status_message(*, checked_at: str, products: list[ProductSnapshot]) -
         "前 10 項商品:",
     ]
     for product in products[:10]:
-        price = f"NT${product.price_twd:,}" if product.price_twd is not None else "價格未知"
-        stock = {
-            "in_stock": "線上現貨",
-            "sold_out": "線上缺貨",
-            "unknown": "線上庫存未知",
-        }[product.stock_status]
-        lines.extend(
-            [
-                f"- {product.name}",
-                f"  庫存: {stock} | 價格: {price}",
-                f"  連結: {product.product_url}",
-            ]
-        )
+        lines.extend(_format_product_lines(product, prefix="- "))
     return "\n".join(lines)
 
 
@@ -619,6 +628,184 @@ def _send_both_notifications(send_notification: Callable[[str, str], None], mess
             errors.append(f"{channel}: {exc}")
     if errors:
         raise NotificationError("; ".join(errors))
+
+
+def _format_display_timestamp(timestamp: str) -> str:
+    if not timestamp:
+        return timestamp
+
+    candidate = timestamp.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(candidate)
+    except ValueError:
+        return timestamp
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(DISPLAY_TIMEZONE).isoformat()
+
+
+def _format_product_lines(product: ProductSnapshot, *, prefix: str = "") -> list[str]:
+    store_inventory_lines = [f"實體庫存:"]
+    store_inventory_lines.extend(
+        _format_store_inventory_lines(product.store_inventory or _default_store_inventory_summary())
+    )
+    lines = [
+        f"{prefix}商品品項: {product.name}",
+        f"線上庫存: {_format_online_stock(product.stock_status)}",
+        *store_inventory_lines,
+        f"價格: {_format_price(product.price_twd)}",
+        f"連結: {product.product_url}",
+    ]
+    return lines
+
+
+def _format_online_stock(stock_status: StockStatus) -> str:
+    return {
+        "in_stock": "線上現貨",
+        "sold_out": "線上缺貨",
+        "unknown": "線上庫存未知",
+    }[stock_status]
+
+
+def _format_price(price_twd: int | None) -> str:
+    return f"NT${price_twd:,}" if price_twd is not None else "價格未知"
+
+
+def _format_store_inventory_lines(
+    store_inventory: dict[str, StoreInventoryStatus],
+) -> list[str]:
+    normalized = _normalize_store_inventory_summary(store_inventory)
+    lines = [
+        f"{label}: {normalized[label]}"
+        for label in TRACKED_STORE_LABELS.values()
+    ]
+    lines.append(f"{OTHER_STORE_LABEL}: {normalized[OTHER_STORE_LABEL]}（請直接上官網查詢）")
+    return lines
+
+
+def _default_store_inventory_summary() -> dict[str, StoreInventoryStatus]:
+    return {
+        label: "UNKNOWN"
+        for label in [*TRACKED_STORE_LABELS.values(), OTHER_STORE_LABEL]
+    }
+
+
+def _normalize_store_inventory_summary(
+    payload: object,
+) -> dict[str, StoreInventoryStatus]:
+    summary = _default_store_inventory_summary()
+    if not isinstance(payload, dict):
+        return summary
+
+    for key, value in payload.items():
+        label = str(key)
+        if label in summary:
+            summary[label] = _normalize_store_inventory_status(str(value))
+    return summary
+
+
+def _normalize_store_inventory_status(value: str) -> StoreInventoryStatus:
+    normalized = value.upper()
+    if normalized in {"TRUE", "FALSE", "UNKNOWN"}:
+        return normalized
+    return "UNKNOWN"
+
+
+def _summarize_store_inventory_rows(
+    rows: object,
+) -> dict[str, StoreInventoryStatus]:
+    summary = _default_store_inventory_summary()
+    other_statuses: list[StoreInventoryStatus] = []
+    if not isinstance(rows, list):
+        return summary
+
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+
+        store_text = str(row.get("store_text", ""))
+        status = _resolve_store_inventory_status(
+            status_text=str(row.get("status_text", "")),
+            row_html=str(row.get("row_html", "")),
+        )
+        store_code = _extract_store_code(store_text)
+        if store_code is None:
+            continue
+        if store_code in TRACKED_STORE_LABELS:
+            label = TRACKED_STORE_LABELS[store_code]
+            summary[label] = _prefer_store_inventory_status(summary[label], status)
+            continue
+        other_statuses.append(status)
+
+    if other_statuses:
+        summary[OTHER_STORE_LABEL] = _aggregate_other_store_statuses(other_statuses)
+    return summary
+
+
+def _resolve_store_inventory_status(
+    *,
+    status_text: str,
+    row_html: str,
+) -> StoreInventoryStatus:
+    combined = f"{status_text} {row_html}".lower()
+    sold_out_keywords = (
+        "✕",
+        "×",
+        "x",
+        "缺貨中",
+        "缺貨",
+        "售完",
+        "無庫存",
+        "soldout",
+        "sold-out",
+        "outofstock",
+        "out-of-stock",
+    )
+    available_keywords = (
+        "○",
+        "△",
+        "熱賣中",
+        "即將完售",
+        "尚有庫存",
+        "有庫存",
+        "available",
+        "instock",
+        "in-stock",
+    )
+    if any(keyword in combined for keyword in sold_out_keywords):
+        return "FALSE"
+    if any(keyword in combined for keyword in available_keywords):
+        return "TRUE"
+    return "UNKNOWN"
+
+
+def _extract_store_code(store_text: str) -> str | None:
+    match = re.search(r"\b(AD\d{3})\b", store_text)
+    if match:
+        return match.group(1)
+    match = re.match(r"(AD\d{3})", store_text)
+    if match:
+        return match.group(1)
+    return None
+
+
+def _prefer_store_inventory_status(
+    current: StoreInventoryStatus,
+    candidate: StoreInventoryStatus,
+) -> StoreInventoryStatus:
+    priority = {"UNKNOWN": 0, "FALSE": 1, "TRUE": 2}
+    return candidate if priority[candidate] > priority[current] else current
+
+
+def _aggregate_other_store_statuses(
+    statuses: list[StoreInventoryStatus],
+) -> StoreInventoryStatus:
+    if any(status == "TRUE" for status in statuses):
+        return "TRUE"
+    if any(status == "FALSE" for status in statuses):
+        return "FALSE"
+    return "UNKNOWN"
 
 
 def _extract_text(html: str) -> str:

@@ -4,17 +4,21 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from scripts.funbox_beyblade_monitor import (
+    OTHER_STORE_LABEL,
     CategoryProduct,
     EnvNotifier,
     MonitorRunner,
     MonitorState,
     NotificationError,
     ProductSnapshot,
+    TRACKED_STORE_LABELS,
     _split_csv_values,
+    _summarize_store_inventory_rows,
     build_lazy_notification_sender,
     build_next_state,
     build_product_snapshot,
     diff_products,
+    format_notification_message,
     format_status_message,
     parse_args,
     parse_product_detail,
@@ -82,6 +86,7 @@ def make_snapshot(
     code: str = "BB93952",
     price: int = 550,
     stock: str = "in_stock",
+    store_inventory: dict[str, str] | None = None,
     first_seen: str = "2026-04-13T00:00:00+00:00",
     last_seen: str = "2026-04-13T00:00:00+00:00",
 ) -> ProductSnapshot:
@@ -92,12 +97,60 @@ def make_snapshot(
         name=name,
         price_twd=price,
         stock_status=stock,
+        store_inventory=store_inventory
+        or {
+            label: "UNKNOWN"
+            for label in [*TRACKED_STORE_LABELS.values(), OTHER_STORE_LABEL]
+        },
         first_seen_at=first_seen,
         last_seen_at=last_seen,
     )
 
 
 class ParsingAndDiffTests(unittest.TestCase):
+    def test_summarize_store_inventory_rows_groups_tracked_stores_and_other(self) -> None:
+        summary = _summarize_store_inventory_rows(
+            [
+                {
+                    "store_text": "AD318台南西門(Funbox Toys & Sanrio Gift Gate) 西門路一段658號3F",
+                    "status_text": "○",
+                    "row_html": "",
+                },
+                {
+                    "store_text": "AD331南紡購物中心(Funbox Toys) 中華東路一段366號4樓F4〈4FB02〉",
+                    "status_text": "✕",
+                    "row_html": "",
+                },
+                {
+                    "store_text": "AD351台南三井(Funbox Toys) 歸仁大道101號3樓",
+                    "status_text": "△",
+                    "row_html": "",
+                },
+                {
+                    "store_text": "AD311台南三越(Funbox Toys)",
+                    "status_text": "缺貨中",
+                    "row_html": "",
+                },
+                {
+                    "store_text": "AD316台南遠百(Funbox Toys)",
+                    "status_text": "熱賣中",
+                    "row_html": "",
+                },
+                {
+                    "store_text": "AD101崇光SOGO(Funbox Toys)",
+                    "status_text": "○",
+                    "row_html": "",
+                },
+            ]
+        )
+
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD318"]], "TRUE")
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD331"]], "FALSE")
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD351"]], "TRUE")
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD311"]], "FALSE")
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD316"]], "TRUE")
+        self.assertEqual(summary[OTHER_STORE_LABEL], "TRUE")
+
     def test_parse_product_detail_extracts_core_fields(self) -> None:
         detail = parse_product_detail(DETAIL_HTML_IN_STOCK)
 
@@ -234,6 +287,7 @@ class MonitorRunnerTests(unittest.TestCase):
         result = runner.run(reset_baseline=False)
 
         self.assertEqual(result.mode, "baseline_created")
+        self.assertEqual(result.checked_at, "2026-04-13T01:00:00+00:00")
         self.assertEqual(notifier.sent, [])
         self.assertIsNotNone(storage.saved_state)
         self.assertEqual(
@@ -315,12 +369,24 @@ class LazyNotifierTests(unittest.TestCase):
                     name="A",
                     stock="in_stock",
                     price=100,
+                    store_inventory={
+                        TRACKED_STORE_LABELS["AD318"]: "TRUE",
+                        TRACKED_STORE_LABELS["AD331"]: "FALSE",
+                        TRACKED_STORE_LABELS["AD351"]: "FALSE",
+                        TRACKED_STORE_LABELS["AD311"]: "UNKNOWN",
+                        TRACKED_STORE_LABELS["AD316"]: "TRUE",
+                        OTHER_STORE_LABEL: "TRUE",
+                    },
                     url="https://shop.funbox.com.tw/products/a",
                 ),
                 make_snapshot(
                     name="B",
                     stock="sold_out",
                     price=200,
+                    store_inventory={
+                        label: "FALSE"
+                        for label in [*TRACKED_STORE_LABELS.values(), OTHER_STORE_LABEL]
+                    },
                     url="https://shop.funbox.com.tw/products/b",
                 ),
             ],
@@ -328,6 +394,15 @@ class LazyNotifierTests(unittest.TestCase):
 
         self.assertEqual([channel for channel, _ in sent], ["telegram", "email"])
         self.assertIn("目前網站狀態", sent[0][1])
+        self.assertIn("檢查時間: 2026-04-13T09:00:00+08:00", sent[0][1])
+        self.assertIn("商品品項: A", sent[0][1])
+        self.assertIn("線上庫存: 線上現貨", sent[0][1])
+        self.assertIn("實體庫存:", sent[0][1])
+        self.assertIn(f"{TRACKED_STORE_LABELS['AD318']}: TRUE", sent[0][1])
+        self.assertIn(f"{TRACKED_STORE_LABELS['AD331']}: FALSE", sent[0][1])
+        self.assertIn(f"{OTHER_STORE_LABEL}: TRUE（請直接上官網查詢）", sent[0][1])
+        self.assertIn("價格: NT$100", sent[0][1])
+        self.assertNotIn("\n庫存:", sent[0][1])
 
     def test_format_status_message_summarizes_stock_counts(self) -> None:
         message = format_status_message(
@@ -337,29 +412,86 @@ class LazyNotifierTests(unittest.TestCase):
                     name="A",
                     stock="in_stock",
                     price=100,
+                    store_inventory={
+                        TRACKED_STORE_LABELS["AD318"]: "TRUE",
+                        TRACKED_STORE_LABELS["AD331"]: "FALSE",
+                        TRACKED_STORE_LABELS["AD351"]: "UNKNOWN",
+                        TRACKED_STORE_LABELS["AD311"]: "FALSE",
+                        TRACKED_STORE_LABELS["AD316"]: "TRUE",
+                        OTHER_STORE_LABEL: "TRUE",
+                    },
                     url="https://shop.funbox.com.tw/products/a",
                 ),
                 make_snapshot(
                     name="B",
                     stock="sold_out",
                     price=200,
+                    store_inventory={
+                        label: "FALSE"
+                        for label in [*TRACKED_STORE_LABELS.values(), OTHER_STORE_LABEL]
+                    },
                     url="https://shop.funbox.com.tw/products/b",
                 ),
                 make_snapshot(
                     name="C",
                     stock="unknown",
                     price=300,
+                    store_inventory={
+                        label: "UNKNOWN"
+                        for label in [*TRACKED_STORE_LABELS.values(), OTHER_STORE_LABEL]
+                    },
                     url="https://shop.funbox.com.tw/products/c",
                 ),
             ],
         )
 
         self.assertIn("商品總數: 3", message)
+        self.assertIn("檢查時間: 2026-04-13T09:00:00+08:00", message)
         self.assertIn("線上現貨: 1", message)
         self.assertIn("線上缺貨: 1", message)
         self.assertIn("線上庫存未知: 1", message)
         self.assertIn("https://shop.funbox.com.tw/categories/takaratomy/beyblade", message)
-        self.assertIn("庫存: 線上現貨", message)
+        self.assertIn("商品品項: A", message)
+        self.assertIn("線上庫存: 線上現貨", message)
+        self.assertIn("實體庫存:", message)
+        self.assertIn(f"{TRACKED_STORE_LABELS['AD316']}: TRUE", message)
+        self.assertIn(f"{OTHER_STORE_LABEL}: TRUE（請直接上官網查詢）", message)
+        self.assertIn("價格: NT$100", message)
+
+    def test_format_notification_message_converts_checked_at_for_display(self) -> None:
+        message = format_notification_message(
+            checked_at="2026-04-13T01:00:00+00:00",
+            events=[
+                type(
+                    "Event",
+                    (),
+                    {
+                        "event_type": "new_listing",
+                        "product": make_snapshot(
+                            store_inventory={
+                                TRACKED_STORE_LABELS["AD318"]: "TRUE",
+                                TRACKED_STORE_LABELS["AD331"]: "FALSE",
+                                TRACKED_STORE_LABELS["AD351"]: "UNKNOWN",
+                                TRACKED_STORE_LABELS["AD311"]: "FALSE",
+                                TRACKED_STORE_LABELS["AD316"]: "TRUE",
+                                OTHER_STORE_LABEL: "FALSE",
+                            }
+                        ),
+                    },
+                )()
+            ],
+        )
+
+        self.assertIn("檢查時間: 2026-04-13T09:00:00+08:00", message)
+        self.assertIn("商品品項: BEYBLADE X 戰鬥陀螺 BX-44 三角強襲", message)
+        self.assertIn("線上庫存: 線上現貨", message)
+        self.assertIn(f"{TRACKED_STORE_LABELS['AD318']}: TRUE", message)
+        self.assertIn(f"{TRACKED_STORE_LABELS['AD331']}: FALSE", message)
+        self.assertIn(f"{OTHER_STORE_LABEL}: FALSE（請直接上官網查詢）", message)
+        self.assertIn("價格: NT$550", message)
+        self.assertIn("連結: https://shop.funbox.com.tw/products/bb93952", message)
+        self.assertNotIn("商品編號:", message)
+        self.assertNotIn("分類商品 ID:", message)
 
 
 class CliArgumentTests(unittest.TestCase):
