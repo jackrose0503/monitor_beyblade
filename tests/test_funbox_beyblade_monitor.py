@@ -308,6 +308,42 @@ class ParsingAndDiffTests(unittest.TestCase):
             page.click_attempts,
         )
 
+    def test_fetch_store_inventory_rows_with_page_tolerates_invisible_south_tab(self) -> None:
+        page = StoreInventoryPageStub(
+            rows=[],
+            evaluate_result={
+                "pane_text": (
+                    "門市\t庫存狀態\n"
+                    "AD101崇光SOGO(Funbox Toys)\t○\n"
+                ),
+                "pane_candidates": [
+                    {
+                        "text": (
+                            "門市\t庫存狀態\n"
+                            "AD311台南三越(Funbox Toys)\t○\n"
+                            "AD316台南遠百(Funbox Toys)\t○\n"
+                            "AD318台南西門(Funbox Toys & Sanrio Gift Gate)\t○\n"
+                            "AD331南紡購物中心(Funbox Toys)\t✕\n"
+                            "AD351台南三井(Funbox Toys)\t✕\n"
+                        ),
+                        "visible": False,
+                        "active": False,
+                    }
+                ],
+                "rows": [],
+            },
+            always_fail_clicks={('a[role="tab"]:has-text("南區"):not([id^="mobile_"])', 0)},
+        )
+
+        rows = _fetch_store_inventory_rows_with_page(page)
+        summary = _summarize_store_inventory_rows(rows)
+
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD318"]], "TRUE")
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD331"]], "FALSE")
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD351"]], "FALSE")
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD311"]], "TRUE")
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD316"]], "TRUE")
+
     def test_summarize_store_inventory_rows_groups_tracked_stores_and_other(self) -> None:
         summary = _summarize_store_inventory_rows(
             [
@@ -547,6 +583,8 @@ class StubLocator:
     def click(self, **kwargs: object) -> None:
         self.page.click_attempts.append((self.selector, self.index, dict(kwargs)))
         key = (self.selector, self.index)
+        if key in self.page.always_fail_clicks:
+            raise RuntimeError("element is not visible")
         remaining_failures = self.page.click_failures.get(key, 0)
         if remaining_failures > 0 and not kwargs.get("force"):
             self.page.click_failures[key] = remaining_failures - 1
@@ -562,6 +600,7 @@ class StoreInventoryPageStub:
         selector_visibility: dict[str, list[bool]] | None = None,
         evaluate_result: object | None = None,
         click_failures: dict[tuple[str, int], int] | None = None,
+        always_fail_clicks: set[tuple[str, int]] | None = None,
     ) -> None:
         self.selector_visibility = selector_visibility or {
             'text=門市庫存狀態查詢': [True],
@@ -571,6 +610,7 @@ class StoreInventoryPageStub:
         self.clicked_selectors: list[tuple[str, int]] = []
         self.click_attempts: list[tuple[str, int, dict[str, object]]] = []
         self.click_failures = click_failures or {}
+        self.always_fail_clicks = always_fail_clicks or set()
         self.rows = rows
         self.evaluate_result = evaluate_result
 
