@@ -288,6 +288,26 @@ class ParsingAndDiffTests(unittest.TestCase):
         self.assertEqual(summary[TRACKED_STORE_LABELS["AD311"]], "TRUE")
         self.assertEqual(summary[TRACKED_STORE_LABELS["AD316"]], "TRUE")
 
+    def test_fetch_store_inventory_rows_with_page_force_clicks_when_overlay_blocks_trigger(self) -> None:
+        page = StoreInventoryPageStub(
+            rows=[
+                {
+                    "store_text": "AD331南紡購物中心(Funbox Toys)",
+                    "status_text": "✕",
+                    "row_html": "",
+                }
+            ],
+            click_failures={('text=門市庫存狀態查詢', 0): 1},
+        )
+
+        rows = _fetch_store_inventory_rows_with_page(page)
+
+        self.assertEqual(rows[0]["store_text"], "AD331南紡購物中心(Funbox Toys)")
+        self.assertIn(
+            ('text=門市庫存狀態查詢', 0, {"force": True}),
+            page.click_attempts,
+        )
+
     def test_summarize_store_inventory_rows_groups_tracked_stores_and_other(self) -> None:
         summary = _summarize_store_inventory_rows(
             [
@@ -524,7 +544,13 @@ class StubLocator:
     def is_visible(self) -> bool:
         return self.page.selector_visibility.get(self.selector, [])[self.index]
 
-    def click(self) -> None:
+    def click(self, **kwargs: object) -> None:
+        self.page.click_attempts.append((self.selector, self.index, dict(kwargs)))
+        key = (self.selector, self.index)
+        remaining_failures = self.page.click_failures.get(key, 0)
+        if remaining_failures > 0 and not kwargs.get("force"):
+            self.page.click_failures[key] = remaining_failures - 1
+            raise RuntimeError("click intercepted by overlay")
         self.page.clicked_selectors.append((self.selector, self.index))
 
 
@@ -535,6 +561,7 @@ class StoreInventoryPageStub:
         rows: list[dict[str, str]],
         selector_visibility: dict[str, list[bool]] | None = None,
         evaluate_result: object | None = None,
+        click_failures: dict[tuple[str, int], int] | None = None,
     ) -> None:
         self.selector_visibility = selector_visibility or {
             'text=門市庫存狀態查詢': [True],
@@ -542,6 +569,8 @@ class StoreInventoryPageStub:
             'text=南區': [True],
         }
         self.clicked_selectors: list[tuple[str, int]] = []
+        self.click_attempts: list[tuple[str, int, dict[str, object]]] = []
+        self.click_failures = click_failures or {}
         self.rows = rows
         self.evaluate_result = evaluate_result
 

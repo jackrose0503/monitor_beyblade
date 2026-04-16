@@ -716,7 +716,7 @@ def _fetch_store_inventory_rows_with_page(page: object) -> list[dict[str, str]]:
     if inventory_trigger is None:
         return []
 
-    inventory_trigger.click()
+    _click_locator_with_force_fallback(inventory_trigger)
     page.wait_for_timeout(500)
 
     south_tab = _first_present_locator(
@@ -731,7 +731,7 @@ def _fetch_store_inventory_rows_with_page(page: object) -> list[dict[str, str]]:
         ],
     )
     if south_tab is not None:
-        south_tab.click()
+        _click_locator_with_force_fallback(south_tab)
         page.wait_for_timeout(500)
 
     payload = page.evaluate(
@@ -813,6 +813,13 @@ def _fetch_store_inventory_rows_with_page(page: object) -> list[dict[str, str]]:
 
     fallback_rows = payload.get("rows")
     return fallback_rows if isinstance(fallback_rows, list) else []
+
+
+def _click_locator_with_force_fallback(locator: object) -> None:
+    try:
+        locator.click()
+    except Exception:
+        locator.click(force=True)
 
 
 def _select_store_inventory_pane_text(payload: dict[str, object]) -> str:
