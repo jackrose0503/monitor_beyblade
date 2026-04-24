@@ -1,6 +1,42 @@
 {
-  "checked_at": "2026-04-24T07:33:47.337363+00:00",
+  "checked_at": "2026-04-24T08:20:31.457768+00:00",
   "products": [
+    {
+      "product_url": "https://shop.funbox.com.tw/products/bb07563",
+      "catalog_id": "750",
+      "product_code": "",
+      "name": "BEYBLADE X 戰鬥陀螺 BX-00 歐比王 葛里維斯將軍",
+      "price_twd": 750,
+      "stock_status": "in_stock",
+      "first_seen_at": "2026-04-24T08:20:31.457768+00:00",
+      "last_seen_at": "2026-04-24T08:20:31.457768+00:00",
+      "store_inventory": {
+        "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "TRUE",
+        "AD331南紡購物中心(Funbox Toys)": "TRUE",
+        "AD351台南三井(Funbox Toys)": "FALSE",
+        "AD311台南三越(Funbox Toys)": "FALSE",
+        "AD316台南遠百(Funbox Toys)": "FALSE",
+        "其他": "TRUE"
+      }
+    },
+    {
+      "product_url": "https://shop.funbox.com.tw/products/bb07564",
+      "catalog_id": "750",
+      "product_code": "",
+      "name": "BEYBLADE X 戰鬥陀螺 BX-00 丘巴卡 風暴兵",
+      "price_twd": 750,
+      "stock_status": "in_stock",
+      "first_seen_at": "2026-04-24T08:20:31.457768+00:00",
+      "last_seen_at": "2026-04-24T08:20:31.457768+00:00",
+      "store_inventory": {
+        "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "TRUE",
+        "AD331南紡購物中心(Funbox Toys)": "TRUE",
+        "AD351台南三井(Funbox Toys)": "FALSE",
+        "AD311台南三越(Funbox Toys)": "FALSE",
+        "AD316台南遠百(Funbox Toys)": "FALSE",
+        "其他": "TRUE"
+      }
+    },
     {
       "product_url": "https://shop.funbox.com.tw/products/bbpr94986",
       "catalog_id": "999999",
@@ -9,7 +45,7 @@
       "price_twd": 999999,
       "stock_status": "in_stock",
       "first_seen_at": "2026-04-14T03:52:39.809472+00:00",
-      "last_seen_at": "2026-04-24T07:33:47.337363+00:00",
+      "last_seen_at": "2026-04-24T08:20:31.457768+00:00",
       "store_inventory": {
         "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "UNKNOWN",
         "AD331南紡購物中心(Funbox Toys)": "UNKNOWN",
@@ -27,7 +63,7 @@
       "price_twd": 999999,
       "stock_status": "in_stock",
       "first_seen_at": "2026-04-13T05:12:25.739733+00:00",
-      "last_seen_at": "2026-04-24T07:33:47.337363+00:00",
+      "last_seen_at": "2026-04-24T08:20:31.457768+00:00",
       "store_inventory": {
         "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "UNKNOWN",
         "AD331南紡購物中心(Funbox Toys)": "UNKNOWN",
@@ -45,7 +81,7 @@
       "price_twd": 999999,
       "stock_status": "in_stock",
       "first_seen_at": "2026-04-16T05:07:46.754615+00:00",
-      "last_seen_at": "2026-04-24T07:33:47.337363+00:00",
+      "last_seen_at": "2026-04-24T08:20:31.457768+00:00",
       "store_inventory": {
         "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "FALSE",
         "AD331南紡購物中心(Funbox Toys)": "FALSE",
