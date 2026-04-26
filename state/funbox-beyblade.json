@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-04-26T21:19:11.989726+00:00",
+  "checked_at": "2026-04-26T21:36:08.442397+00:00",
   "products": [
     {
       "product_url": "https://shop.funbox.com.tw/products/bb07563",
@@ -9,7 +9,7 @@
       "price_twd": 750,
       "stock_status": "in_stock",
       "first_seen_at": "2026-04-24T08:20:31.457768+00:00",
-      "last_seen_at": "2026-04-26T21:19:11.989726+00:00",
+      "last_seen_at": "2026-04-26T21:36:08.442397+00:00",
       "store_inventory": {
         "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "TRUE",
         "AD331南紡購物中心(Funbox Toys)": "TRUE",
@@ -27,7 +27,7 @@
       "price_twd": 750,
       "stock_status": "in_stock",
       "first_seen_at": "2026-04-24T08:20:31.457768+00:00",
-      "last_seen_at": "2026-04-26T21:19:11.989726+00:00",
+      "last_seen_at": "2026-04-26T21:36:08.442397+00:00",
       "store_inventory": {
         "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "TRUE",
         "AD331南紡購物中心(Funbox Toys)": "TRUE",
@@ -45,7 +45,7 @@
       "price_twd": 999999,
       "stock_status": "sold_out",
       "first_seen_at": "2026-04-14T03:52:39.809472+00:00",
-      "last_seen_at": "2026-04-26T21:19:11.989726+00:00",
+      "last_seen_at": "2026-04-26T21:36:08.442397+00:00",
       "store_inventory": {
         "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "UNKNOWN",
         "AD331南紡購物中心(Funbox Toys)": "UNKNOWN",
@@ -63,7 +63,7 @@
       "price_twd": 999999,
       "stock_status": "in_stock",
       "first_seen_at": "2026-04-13T05:12:25.739733+00:00",
-      "last_seen_at": "2026-04-26T21:19:11.989726+00:00",
+      "last_seen_at": "2026-04-26T21:36:08.442397+00:00",
       "store_inventory": {
         "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "UNKNOWN",
         "AD331南紡購物中心(Funbox Toys)": "UNKNOWN",
@@ -81,7 +81,7 @@
       "price_twd": 999999,
       "stock_status": "in_stock",
       "first_seen_at": "2026-04-16T05:07:46.754615+00:00",
-      "last_seen_at": "2026-04-26T21:19:11.989726+00:00",
+      "last_seen_at": "2026-04-26T21:36:08.442397+00:00",
       "store_inventory": {
         "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "FALSE",
         "AD331南紡購物中心(Funbox Toys)": "FALSE",
@@ -99,7 +99,7 @@
       "price_twd": 350,
       "stock_status": "sold_out",
       "first_seen_at": "2026-04-25T19:03:35.965986+00:00",
-      "last_seen_at": "2026-04-26T21:19:11.989726+00:00",
+      "last_seen_at": "2026-04-26T21:36:08.442397+00:00",
       "store_inventory": {
         "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "FALSE",
         "AD331南紡購物中心(Funbox Toys)": "FALSE",
@@ -117,7 +117,7 @@
       "price_twd": 799,
       "stock_status": "in_stock",
       "first_seen_at": "2026-04-25T19:26:51.613476+00:00",
-      "last_seen_at": "2026-04-26T21:19:11.989726+00:00",
+      "last_seen_at": "2026-04-26T21:36:08.442397+00:00",
       "store_inventory": {
         "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "FALSE",
         "AD331南紡購物中心(Funbox Toys)": "FALSE",
@@ -135,7 +135,7 @@
       "price_twd": 799,
       "stock_status": "in_stock",
       "first_seen_at": "2026-04-26T19:10:58.157031+00:00",
-      "last_seen_at": "2026-04-26T21:19:11.989726+00:00",
+      "last_seen_at": "2026-04-26T21:36:08.442397+00:00",
       "store_inventory": {
         "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "FALSE",
         "AD331南紡購物中心(Funbox Toys)": "FALSE",
@@ -153,7 +153,7 @@
       "price_twd": 799,
       "stock_status": "in_stock",
       "first_seen_at": "2026-04-25T19:03:35.965986+00:00",
-      "last_seen_at": "2026-04-26T21:19:11.989726+00:00",
+      "last_seen_at": "2026-04-26T21:36:08.442397+00:00",
       "store_inventory": {
         "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "FALSE",
         "AD331南紡購物中心(Funbox Toys)": "FALSE",
@@ -171,7 +171,7 @@
       "price_twd": 799,
       "stock_status": "in_stock",
       "first_seen_at": "2026-04-25T19:03:35.965986+00:00",
-      "last_seen_at": "2026-04-26T21:19:11.989726+00:00",
+      "last_seen_at": "2026-04-26T21:36:08.442397+00:00",
       "store_inventory": {
         "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "TRUE",
         "AD331南紡購物中心(Funbox Toys)": "TRUE",
