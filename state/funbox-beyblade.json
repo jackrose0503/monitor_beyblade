@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-05-20T07:39:25.039575+00:00",
+  "checked_at": "2026-05-20T08:42:25.788205+00:00",
   "products": [
     {
       "product_url": "https://shop.funbox.com.tw/products/bbpr94986",
@@ -9,7 +9,7 @@
       "price_twd": 999999,
       "stock_status": "in_stock",
       "first_seen_at": "2026-04-14T03:52:39.809472+00:00",
-      "last_seen_at": "2026-05-20T07:39:25.039575+00:00",
+      "last_seen_at": "2026-05-20T08:42:25.788205+00:00",
       "store_inventory": {
         "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "UNKNOWN",
         "AD331南紡購物中心(Funbox Toys)": "UNKNOWN",
@@ -27,7 +27,7 @@
       "price_twd": 999999,
       "stock_status": "in_stock",
       "first_seen_at": "2026-04-13T05:12:25.739733+00:00",
-      "last_seen_at": "2026-05-20T07:39:25.039575+00:00",
+      "last_seen_at": "2026-05-20T08:42:25.788205+00:00",
       "store_inventory": {
         "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "UNKNOWN",
         "AD331南紡購物中心(Funbox Toys)": "UNKNOWN",
@@ -45,7 +45,7 @@
       "price_twd": 999999,
       "stock_status": "in_stock",
       "first_seen_at": "2026-04-16T05:07:46.754615+00:00",
-      "last_seen_at": "2026-05-20T07:39:25.039575+00:00",
+      "last_seen_at": "2026-05-20T08:42:25.788205+00:00",
       "store_inventory": {
         "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "FALSE",
         "AD331南紡購物中心(Funbox Toys)": "FALSE",
@@ -60,10 +60,10 @@
       "catalog_id": "995",
       "product_code": "",
       "name": "BEYBLADE X 戰鬥陀螺 BXG-29 鋼鐵人 / 薩諾斯",
-      "price_twd": 799,
+      "price_twd": 995,
       "stock_status": "in_stock",
       "first_seen_at": "2026-04-26T19:10:58.157031+00:00",
-      "last_seen_at": "2026-05-20T07:39:25.039575+00:00",
+      "last_seen_at": "2026-05-20T08:42:25.788205+00:00",
       "store_inventory": {
         "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "FALSE",
         "AD331南紡購物中心(Funbox Toys)": "FALSE",
@@ -78,10 +78,10 @@
       "catalog_id": "995",
       "product_code": "",
       "name": "BEYBLADE X 戰鬥陀螺 BXG-33路克天行者/達斯維達",
-      "price_twd": 799,
+      "price_twd": 995,
       "stock_status": "in_stock",
       "first_seen_at": "2026-04-25T19:03:35.965986+00:00",
-      "last_seen_at": "2026-05-20T07:39:25.039575+00:00",
+      "last_seen_at": "2026-05-20T08:42:25.788205+00:00",
       "store_inventory": {
         "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "FALSE",
         "AD331南紡購物中心(Funbox Toys)": "FALSE",
