@@ -1,15 +1,15 @@
 {
-  "checked_at": "2026-06-07T06:43:49.944391+00:00",
+  "checked_at": "2026-06-07T08:03:06.703845+00:00",
   "products": [
     {
       "product_url": "https://shop.funbox.com.tw/products/bbpr94986",
       "catalog_id": "999999",
       "product_code": "",
-      "name": "此官網未服務您所在的區域",
-      "price_twd": null,
-      "stock_status": "unknown",
+      "name": "【先行預購】APP兌換 戰鬥陀螺 BXG-17 限定軸心組 黑金版",
+      "price_twd": 999999,
+      "stock_status": "in_stock",
       "first_seen_at": "2026-04-14T03:52:39.809472+00:00",
-      "last_seen_at": "2026-06-07T06:43:49.944391+00:00",
+      "last_seen_at": "2026-06-07T08:03:06.703845+00:00",
       "store_inventory": {
         "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "UNKNOWN",
         "AD331南紡購物中心(Funbox Toys)": "UNKNOWN",
@@ -27,7 +27,7 @@
       "price_twd": 999999,
       "stock_status": "in_stock",
       "first_seen_at": "2026-04-13T05:12:25.739733+00:00",
-      "last_seen_at": "2026-06-07T06:43:49.944391+00:00",
+      "last_seen_at": "2026-06-07T08:03:06.703845+00:00",
       "store_inventory": {
         "AD318台南西門(Funbox Toys & Sanrio Gift Gate)": "UNKNOWN",
         "AD331南紡購物中心(Funbox Toys)": "UNKNOWN",
