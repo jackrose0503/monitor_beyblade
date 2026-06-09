@@ -15,6 +15,11 @@ on:
         required: false
         default: false
         type: boolean
+      sync_store_catalog:
+        description: Refresh config/store_subscriptions.json from the latest store inventory data
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -80,9 +85,14 @@ jobs:
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
           RESET_BASELINE: ${{ github.event.inputs.reset_baseline || 'false' }}
           SEND_STATUS_REPORT: ${{ github.event.inputs.send_status_report || 'false' }}
+          SYNC_STORE_CATALOG: ${{ github.event.inputs.sync_store_catalog || 'false' }}
         run: |
           set -euo pipefail
-          if [ "${SEND_STATUS_REPORT}" = "true" ]; then
+          if [ "${SYNC_STORE_CATALOG}" = "true" ]; then
+            python3 scripts/funbox_beyblade_monitor.py \
+              --sync-store-catalog \
+              --store-subscriptions-file config/store_subscriptions.json
+          elif [ "${SEND_STATUS_REPORT}" = "true" ]; then
             python3 scripts/funbox_beyblade_monitor.py --send-status-report
           elif [ "${RESET_BASELINE}" = "true" ]; then
             python3 scripts/funbox_beyblade_monitor.py \
@@ -93,7 +103,22 @@ jobs:
               --state-file monitor-state-worktree/state/funbox-beyblade.json
           fi
 
+      - name: Commit updated store subscriptions
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.sync_store_catalog == 'true' }}
+        env:
+          TARGET_BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          git add config/store_subscriptions.json
+          if git diff --cached --quiet; then
+            echo "No store subscription changes to commit."
+            exit 0
+          fi
+          git commit -m "chore: sync store subscriptions"
+          git push origin HEAD:${TARGET_BRANCH}
+
       - name: Commit updated state
+        if: ${{ !(github.event_name == 'workflow_dispatch' && github.event.inputs.sync_store_catalog == 'true') }}
         run: |
           set -euo pipefail
           cd monitor-state-worktree
