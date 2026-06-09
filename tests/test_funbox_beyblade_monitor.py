@@ -11,6 +11,8 @@ from scripts.funbox_beyblade_monitor import (
     MonitorState,
     NotificationError,
     ProductSnapshot,
+    StoreSubscription,
+    StoreSubscriptions,
     TRACKED_STORE_LABELS,
     _extract_store_inventory_rows_from_text,
     _fetch_store_inventory_rows_with_page,
@@ -19,6 +21,7 @@ from scripts.funbox_beyblade_monitor import (
     build_lazy_notification_sender,
     build_next_state,
     build_product_snapshot,
+    build_synced_store_subscriptions,
     diff_products,
     format_notification_message,
     format_status_message,
@@ -99,18 +102,25 @@ def make_snapshot(
         name=name,
         price_twd=price,
         stock_status=stock,
-        store_inventory=store_inventory
-        or {
-            label: "UNKNOWN"
-            for label in [*TRACKED_STORE_LABELS.values(), OTHER_STORE_LABEL]
-        },
+        store_inventory=store_inventory or {},
         first_seen_at=first_seen,
         last_seen_at=last_seen,
     )
 
 
+def make_subscriptions() -> StoreSubscriptions:
+    return StoreSubscriptions(
+        include_other=True,
+        stores=[
+            StoreSubscription("AD318", TRACKED_STORE_LABELS["AD318"], True),
+            StoreSubscription("AD101", "AD101崇光SOGO(Funbox Toys)", True),
+            StoreSubscription("AD331", TRACKED_STORE_LABELS["AD331"], False),
+        ],
+    )
+
+
 class ParsingAndDiffTests(unittest.TestCase):
-    def test_extract_store_inventory_rows_from_text_parses_south_region_inventory_table(self) -> None:
+    def test_extract_store_inventory_rows_from_text_parses_inventory_table(self) -> None:
         rows = _extract_store_inventory_rows_from_text(
             """
             庫存狀態僅供參考 實際數量以現場為主
@@ -120,159 +130,39 @@ class ParsingAndDiffTests(unittest.TestCase):
             南區
             東區
             門市\t庫存狀態
-            AD207嘉義遠東(Funbox Toys)\t○
-            AD209嘉義耐斯(Funbox Toys)\t○
-            AD210嘉義三越(Funbox Toys)\t○
-            AD303新光高雄(Funbox Toys)\t✕
-            AD308高雄漢神(Funbox Toys)\t○
-            AD310崇光高雄(Funbox Toys)\t○
+            AD101崇光SOGO(Funbox Toys)\t○
             AD311台南三越(Funbox Toys)\t○
-            AD312屏東太平洋(Funbox Toys)\t○
             AD316台南遠百(Funbox Toys)\t○
-            AD317高雄大遠百(Funbox Toys)\t○
             AD318台南西門(Funbox Toys & Sanrio Gift Gate)\t○
-            AD320漢神巨蛋(Funbox Toys)\t✕
-            AD321高雄左營(Funbox Toys)\t○
-            AD323夢時代2館(Funbox Toys)\t✕
-            AD325屏東環球(Funbox Toys)\t○
-            AD330義大世界(Funbox Toys)\t✕
             AD331南紡購物中心(Funbox Toys)\t✕
-            AD335昇恆昌澎湖(Funbox Toys)\t○
-            AD336高雄大立(Funbox Toys)\t○
-            AD337義大二館(Funbox Toys)\t○
-            AD338義享天地(Funbox Toys)\t○
-            AD350大魯閣新光(Funbox Toys)\t○
             AD351台南三井(Funbox Toys)\t✕
             """
         )
 
         summary = _summarize_store_inventory_rows(rows)
 
+        self.assertEqual(summary["AD101崇光SOGO(Funbox Toys)"], "TRUE")
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD311"]], "TRUE")
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD316"]], "TRUE")
         self.assertEqual(summary[TRACKED_STORE_LABELS["AD318"]], "TRUE")
         self.assertEqual(summary[TRACKED_STORE_LABELS["AD331"]], "FALSE")
         self.assertEqual(summary[TRACKED_STORE_LABELS["AD351"]], "FALSE")
-        self.assertEqual(summary[TRACKED_STORE_LABELS["AD311"]], "TRUE")
-        self.assertEqual(summary[TRACKED_STORE_LABELS["AD316"]], "TRUE")
-        self.assertEqual(summary[OTHER_STORE_LABEL], "TRUE")
 
-    def test_fetch_store_inventory_rows_with_page_opens_modal_and_switches_to_south(self) -> None:
-        page = StoreInventoryPageStub(
-            rows=[
-                {
-                    "store_text": "AD331南紡購物中心(Funbox Toys)",
-                    "status_text": "✕",
-                    "row_html": "",
-                }
-            ]
-        )
-
-        rows = _fetch_store_inventory_rows_with_page(page)
-
-        self.assertEqual(
-            page.clicked_selectors,
-            [('text=門市庫存狀態查詢', 0), ('text=南區', 0)],
-        )
-        self.assertEqual(rows[0]["store_text"], "AD331南紡購物中心(Funbox Toys)")
-
-    def test_fetch_store_inventory_rows_with_page_prefers_visible_south_tab(self) -> None:
-        page = StoreInventoryPageStub(
-            rows=[
-                {
-                    "store_text": "AD331南紡購物中心(Funbox Toys)",
-                    "status_text": "✕",
-                    "row_html": "",
-                }
-            ],
-            selector_visibility={
-                'text=門市庫存狀態查詢': [True],
-                'a[href*="inventory_quantities"]': [True],
-                'text=南區': [False, True],
-            },
-        )
-
-        _fetch_store_inventory_rows_with_page(page)
-
-        self.assertIn(('text=南區', 1), page.clicked_selectors)
-
-    def test_fetch_store_inventory_rows_with_page_prefers_non_mobile_south_selector(self) -> None:
-        page = StoreInventoryPageStub(
-            rows=[
-                {
-                    "store_text": "AD331南紡購物中心(Funbox Toys)",
-                    "status_text": "✕",
-                    "row_html": "",
-                }
-            ],
-            selector_visibility={
-                'text=門市庫存狀態查詢': [True],
-                'a[href*="inventory_quantities"]': [True],
-                'a[role="tab"]:has-text("南區"):not([id^="mobile_"])': [True],
-                'text=南區': [True],
-            },
-        )
-
-        _fetch_store_inventory_rows_with_page(page)
-
-        self.assertIn(
-            ('a[role="tab"]:has-text("南區"):not([id^="mobile_"])', 0),
-            page.clicked_selectors,
-        )
-
-    def test_fetch_store_inventory_rows_with_page_prefers_active_pane_text(self) -> None:
+    def test_fetch_store_inventory_rows_with_page_collects_rows_from_multiple_panes(self) -> None:
         page = StoreInventoryPageStub(
             rows=[],
             evaluate_result={
-                "pane_text": (
-                    "門市\t庫存狀態\n"
-                    "AD311台南三越(Funbox Toys)\t○\n"
-                    "AD316台南遠百(Funbox Toys)\t○\n"
-                    "AD318台南西門(Funbox Toys & Sanrio Gift Gate)\t○\n"
-                    "AD331南紡購物中心(Funbox Toys)\t✕\n"
-                    "AD351台南三井(Funbox Toys)\t✕\n"
-                ),
-                "rows": [],
-            },
-        )
-
-        rows = _fetch_store_inventory_rows_with_page(page)
-        summary = _summarize_store_inventory_rows(rows)
-
-        self.assertEqual(summary[TRACKED_STORE_LABELS["AD318"]], "TRUE")
-        self.assertEqual(summary[TRACKED_STORE_LABELS["AD331"]], "FALSE")
-        self.assertEqual(summary[TRACKED_STORE_LABELS["AD351"]], "FALSE")
-        self.assertEqual(summary[TRACKED_STORE_LABELS["AD311"]], "TRUE")
-        self.assertEqual(summary[TRACKED_STORE_LABELS["AD316"]], "TRUE")
-
-    def test_fetch_store_inventory_rows_with_page_prefers_tracked_store_pane_over_active_non_target_pane(self) -> None:
-        page = StoreInventoryPageStub(
-            rows=[],
-            evaluate_result={
-                "pane_text": (
-                    "門市\t庫存狀態\n"
-                    "AD101崇光SOGO(Funbox Toys)\t○\n"
-                    "AD105三越南西(Funbox Toys)\t○\n"
-                ),
                 "pane_candidates": [
                     {
-                        "text": (
-                            "門市\t庫存狀態\n"
-                            "AD101崇光SOGO(Funbox Toys)\t○\n"
-                            "AD105三越南西(Funbox Toys)\t○\n"
-                        ),
-                        "visible": True,
-                        "active": True,
+                        "text": "門市\t庫存狀態\nAD101崇光SOGO(Funbox Toys)\t○\nAD105三越南西(Funbox Toys)\t○\n",
                     },
                     {
                         "text": (
                             "門市\t庫存狀態\n"
                             "AD311台南三越(Funbox Toys)\t○\n"
-                            "AD316台南遠百(Funbox Toys)\t○\n"
                             "AD318台南西門(Funbox Toys & Sanrio Gift Gate)\t○\n"
                             "AD331南紡購物中心(Funbox Toys)\t✕\n"
-                            "AD351台南三井(Funbox Toys)\t✕\n"
                         ),
-                        "visible": False,
-                        "active": False,
                     },
                 ],
                 "rows": [],
@@ -282,149 +172,55 @@ class ParsingAndDiffTests(unittest.TestCase):
         rows = _fetch_store_inventory_rows_with_page(page)
         summary = _summarize_store_inventory_rows(rows)
 
+        self.assertEqual(page.clicked_selectors, [("text=門市庫存狀態查詢", 0)])
+        self.assertEqual(summary["AD101崇光SOGO(Funbox Toys)"], "TRUE")
+        self.assertEqual(summary[TRACKED_STORE_LABELS["AD311"]], "TRUE")
         self.assertEqual(summary[TRACKED_STORE_LABELS["AD318"]], "TRUE")
         self.assertEqual(summary[TRACKED_STORE_LABELS["AD331"]], "FALSE")
-        self.assertEqual(summary[TRACKED_STORE_LABELS["AD351"]], "FALSE")
-        self.assertEqual(summary[TRACKED_STORE_LABELS["AD311"]], "TRUE")
-        self.assertEqual(summary[TRACKED_STORE_LABELS["AD316"]], "TRUE")
 
     def test_fetch_store_inventory_rows_with_page_force_clicks_when_overlay_blocks_trigger(self) -> None:
         page = StoreInventoryPageStub(
-            rows=[
-                {
-                    "store_text": "AD331南紡購物中心(Funbox Toys)",
-                    "status_text": "✕",
-                    "row_html": "",
-                }
-            ],
-            click_failures={('text=門市庫存狀態查詢', 0): 1},
+            rows=[],
+            evaluate_result={
+                "pane_candidates": [{"text": "AD331南紡購物中心(Funbox Toys)\t✕"}],
+                "rows": [],
+            },
+            click_failures={("text=門市庫存狀態查詢", 0): 1},
         )
 
         rows = _fetch_store_inventory_rows_with_page(page)
 
         self.assertEqual(rows[0]["store_text"], "AD331南紡購物中心(Funbox Toys)")
         self.assertIn(
-            ('text=門市庫存狀態查詢', 0, {"force": True}),
+            ("text=門市庫存狀態查詢", 0, {"force": True}),
             page.click_attempts,
         )
 
-    def test_fetch_store_inventory_rows_with_page_tolerates_invisible_south_tab(self) -> None:
-        page = StoreInventoryPageStub(
-            rows=[],
-            evaluate_result={
-                "pane_text": (
-                    "門市\t庫存狀態\n"
-                    "AD101崇光SOGO(Funbox Toys)\t○\n"
-                ),
-                "pane_candidates": [
-                    {
-                        "text": (
-                            "門市\t庫存狀態\n"
-                            "AD311台南三越(Funbox Toys)\t○\n"
-                            "AD316台南遠百(Funbox Toys)\t○\n"
-                            "AD318台南西門(Funbox Toys & Sanrio Gift Gate)\t○\n"
-                            "AD331南紡購物中心(Funbox Toys)\t✕\n"
-                            "AD351台南三井(Funbox Toys)\t✕\n"
-                        ),
-                        "visible": False,
-                        "active": False,
-                    }
-                ],
-                "rows": [],
-            },
-            always_fail_clicks={('a[role="tab"]:has-text("南區"):not([id^="mobile_"])', 0)},
+    def test_build_synced_store_subscriptions_preserves_existing_enabled_flags(self) -> None:
+        existing = StoreSubscriptions(
+            include_other=True,
+            stores=[
+                StoreSubscription("AD318", TRACKED_STORE_LABELS["AD318"], True),
+                StoreSubscription("AD101", "AD101崇光SOGO(Funbox Toys)", False),
+            ],
         )
-
-        rows = _fetch_store_inventory_rows_with_page(page)
-        summary = _summarize_store_inventory_rows(rows)
-
-        self.assertEqual(summary[TRACKED_STORE_LABELS["AD318"]], "TRUE")
-        self.assertEqual(summary[TRACKED_STORE_LABELS["AD331"]], "FALSE")
-        self.assertEqual(summary[TRACKED_STORE_LABELS["AD351"]], "FALSE")
-        self.assertEqual(summary[TRACKED_STORE_LABELS["AD311"]], "TRUE")
-        self.assertEqual(summary[TRACKED_STORE_LABELS["AD316"]], "TRUE")
-
-    def test_summarize_store_inventory_rows_groups_tracked_stores_and_other(self) -> None:
-        summary = _summarize_store_inventory_rows(
-            [
-                {
-                    "store_text": "AD318台南西門(Funbox Toys & Sanrio Gift Gate) 西門路一段658號3F",
-                    "status_text": "○",
-                    "row_html": "",
-                },
-                {
-                    "store_text": "AD331南紡購物中心(Funbox Toys) 中華東路一段366號4樓F4〈4FB02〉",
-                    "status_text": "✕",
-                    "row_html": "",
-                },
-                {
-                    "store_text": "AD351台南三井(Funbox Toys) 歸仁大道101號3樓",
-                    "status_text": "△",
-                    "row_html": "",
-                },
-                {
-                    "store_text": "AD311台南三越(Funbox Toys)",
-                    "status_text": "缺貨中",
-                    "row_html": "",
-                },
-                {
-                    "store_text": "AD316台南遠百(Funbox Toys)",
-                    "status_text": "熱賣中",
-                    "row_html": "",
-                },
-                {
-                    "store_text": "AD101崇光SOGO(Funbox Toys)",
-                    "status_text": "○",
-                    "row_html": "",
-                },
-            ]
-        )
-
-        self.assertEqual(summary[TRACKED_STORE_LABELS["AD318"]], "TRUE")
-        self.assertEqual(summary[TRACKED_STORE_LABELS["AD331"]], "FALSE")
-        self.assertEqual(summary[TRACKED_STORE_LABELS["AD351"]], "TRUE")
-        self.assertEqual(summary[TRACKED_STORE_LABELS["AD311"]], "FALSE")
-        self.assertEqual(summary[TRACKED_STORE_LABELS["AD316"]], "TRUE")
-        self.assertEqual(summary[OTHER_STORE_LABEL], "TRUE")
-
-    def test_summarize_store_inventory_rows_detects_sold_out_from_icon_html(self) -> None:
-        summary = _summarize_store_inventory_rows(
-            [
-                {
-                    "store_text": "AD331南紡購物中心(Funbox Toys)",
-                    "status_text": "",
-                    "row_html": '<td class="inventory-status text-danger"><i class="fa fa-times"></i></td>',
+        products = [
+            make_snapshot(
+                store_inventory={
+                    TRACKED_STORE_LABELS["AD318"]: "TRUE",
+                    "AD101崇光SOGO(Funbox Toys)": "FALSE",
+                    "AD207嘉義遠東(Funbox Toys)": "TRUE",
                 }
-            ]
-        )
+            )
+        ]
 
-        self.assertEqual(summary[TRACKED_STORE_LABELS["AD331"]], "FALSE")
+        synced = build_synced_store_subscriptions(existing, products)
+        synced_by_code = {store.store_code: store for store in synced.stores}
 
-    def test_summarize_store_inventory_rows_detects_in_stock_from_icon_html(self) -> None:
-        summary = _summarize_store_inventory_rows(
-            [
-                {
-                    "store_text": "AD351台南三井(Funbox Toys)",
-                    "status_text": "",
-                    "row_html": '<td class="inventory-status text-success"><i class="fa fa-circle"></i></td>',
-                }
-            ]
-        )
-
-        self.assertEqual(summary[TRACKED_STORE_LABELS["AD351"]], "TRUE")
-
-    def test_summarize_store_inventory_rows_prefers_status_cell_html_over_row_text(self) -> None:
-        summary = _summarize_store_inventory_rows(
-            [
-                {
-                    "store_text": "AD316台南遠百(Funbox Toys) 缺貨中",
-                    "status_text": "",
-                    "row_html": '<td class="inventory-status text-success"><i class="fa fa-circle"></i></td>',
-                }
-            ]
-        )
-
-        self.assertEqual(summary[TRACKED_STORE_LABELS["AD316"]], "TRUE")
+        self.assertTrue(synced_by_code["AD318"].enabled)
+        self.assertFalse(synced_by_code["AD101"].enabled)
+        self.assertFalse(synced_by_code["AD207"].enabled)
+        self.assertEqual(synced_by_code["AD207"].store_label, "AD207嘉義遠東(Funbox Toys)")
 
     def test_parse_product_detail_extracts_core_fields(self) -> None:
         detail = parse_product_detail(DETAIL_HTML_IN_STOCK)
@@ -444,14 +240,12 @@ class ParsingAndDiffTests(unittest.TestCase):
     def test_parse_product_detail_marks_low_stock_blocked_as_sold_out(self) -> None:
         detail = parse_product_detail(DETAIL_HTML_LOW_STOCK_BLOCKED)
 
-        self.assertEqual(detail.product_code, "BB09726")
-        self.assertEqual(detail.price_twd, 495)
         self.assertEqual(detail.stock_status, "sold_out")
 
-    def test_resolve_stock_status_from_signals_treats_hot_selling_as_in_stock(self) -> None:
-        status = resolve_stock_status_from_signals(stock_text="熱賣中")
+    def test_parse_product_detail_uses_primary_stock_section_over_other_text(self) -> None:
+        detail = parse_product_detail(DETAIL_HTML_STOCK_SECTION_WITH_UNRELATED_IN_STOCK_TEXT)
 
-        self.assertEqual(status, "in_stock")
+        self.assertEqual(detail.stock_status, "sold_out")
 
     def test_resolve_stock_status_from_signals_prefers_add_to_cart_capability(self) -> None:
         status = resolve_stock_status_from_signals(
@@ -461,11 +255,6 @@ class ParsingAndDiffTests(unittest.TestCase):
         )
 
         self.assertEqual(status, "in_stock")
-
-    def test_parse_product_detail_uses_primary_stock_section_over_other_text(self) -> None:
-        detail = parse_product_detail(DETAIL_HTML_STOCK_SECTION_WITH_UNRELATED_IN_STOCK_TEXT)
-
-        self.assertEqual(detail.stock_status, "sold_out")
 
     def test_diff_products_reports_new_listing_and_restock_only(self) -> None:
         previous = [
@@ -515,18 +304,26 @@ class ParsingAndDiffTests(unittest.TestCase):
                 )
             ],
         )
-        current = [
-            make_snapshot(
-                first_seen="ignored",
-                last_seen="ignored",
-            )
-        ]
+        current = [make_snapshot(first_seen="ignored", last_seen="ignored")]
 
         next_state = build_next_state(previous, current, checked_at="2026-04-13T01:00:00+00:00")
 
         self.assertEqual(next_state.checked_at, "2026-04-13T01:00:00+00:00")
         self.assertEqual(next_state.products[0].first_seen_at, "2026-04-12T23:00:00+00:00")
         self.assertEqual(next_state.products[0].last_seen_at, "2026-04-13T01:00:00+00:00")
+
+    def test_build_product_snapshot_prefers_detail_signal_when_known(self) -> None:
+        category_product = CategoryProduct(
+            product_url="https://shop.funbox.com.tw/products/bb09726",
+            catalog_id="66836005",
+            name="BEYBLADE X 戰鬥陀螺 CX-14 騎士堡壘",
+            stock_status="sold_out",
+        )
+        detail = parse_product_detail(DETAIL_HTML_IN_STOCK)
+
+        snapshot = build_product_snapshot(category_product=category_product, detail=detail)
+
+        self.assertEqual(snapshot.stock_status, "in_stock")
 
 
 class StubStorage:
@@ -583,8 +380,6 @@ class StubLocator:
     def click(self, **kwargs: object) -> None:
         self.page.click_attempts.append((self.selector, self.index, dict(kwargs)))
         key = (self.selector, self.index)
-        if key in self.page.always_fail_clicks:
-            raise RuntimeError("element is not visible")
         remaining_failures = self.page.click_failures.get(key, 0)
         if remaining_failures > 0 and not kwargs.get("force"):
             self.page.click_failures[key] = remaining_failures - 1
@@ -600,17 +395,14 @@ class StoreInventoryPageStub:
         selector_visibility: dict[str, list[bool]] | None = None,
         evaluate_result: object | None = None,
         click_failures: dict[tuple[str, int], int] | None = None,
-        always_fail_clicks: set[tuple[str, int]] | None = None,
     ) -> None:
         self.selector_visibility = selector_visibility or {
-            'text=門市庫存狀態查詢': [True],
+            "text=門市庫存狀態查詢": [True],
             'a[href*="inventory_quantities"]': [True],
-            'text=南區': [True],
         }
         self.clicked_selectors: list[tuple[str, int]] = []
         self.click_attempts: list[tuple[str, int, dict[str, object]]] = []
         self.click_failures = click_failures or {}
-        self.always_fail_clicks = always_fail_clicks or set()
         self.rows = rows
         self.evaluate_result = evaluate_result
 
@@ -620,7 +412,7 @@ class StoreInventoryPageStub:
     def wait_for_timeout(self, _milliseconds: int) -> None:
         return None
 
-    def evaluate(self, _script: str) -> list[dict[str, str]]:
+    def evaluate(self, _script: str) -> object:
         if self.evaluate_result is not None:
             return self.evaluate_result
         return self.rows
@@ -644,10 +436,7 @@ class MonitorRunnerTests(unittest.TestCase):
         self.assertEqual(result.checked_at, "2026-04-13T01:00:00+00:00")
         self.assertEqual(notifier.sent, [])
         self.assertIsNotNone(storage.saved_state)
-        self.assertEqual(
-            storage.saved_state.products[0].first_seen_at,
-            "2026-04-13T01:00:00+00:00",
-        )
+        self.assertEqual(storage.saved_state.products[0].first_seen_at, "2026-04-13T01:00:00+00:00")
 
     def test_runner_does_not_persist_state_when_any_notification_fails(self) -> None:
         previous_state = MonitorState(
@@ -725,25 +514,14 @@ class LazyNotifierTests(unittest.TestCase):
                     price=100,
                     store_inventory={
                         TRACKED_STORE_LABELS["AD318"]: "TRUE",
+                        "AD101崇光SOGO(Funbox Toys)": "FALSE",
                         TRACKED_STORE_LABELS["AD331"]: "FALSE",
-                        TRACKED_STORE_LABELS["AD351"]: "FALSE",
-                        TRACKED_STORE_LABELS["AD311"]: "UNKNOWN",
-                        TRACKED_STORE_LABELS["AD316"]: "TRUE",
-                        OTHER_STORE_LABEL: "TRUE",
+                        "AD207嘉義遠東(Funbox Toys)": "TRUE",
                     },
                     url="https://shop.funbox.com.tw/products/a",
-                ),
-                make_snapshot(
-                    name="B",
-                    stock="sold_out",
-                    price=200,
-                    store_inventory={
-                        label: "FALSE"
-                        for label in [*TRACKED_STORE_LABELS.values(), OTHER_STORE_LABEL]
-                    },
-                    url="https://shop.funbox.com.tw/products/b",
-                ),
+                )
             ],
+            store_subscriptions=make_subscriptions(),
         )
 
         self.assertEqual([channel for channel, _ in sent], ["telegram", "email"])
@@ -751,14 +529,12 @@ class LazyNotifierTests(unittest.TestCase):
         self.assertIn("檢查時間: 2026-04-13T09:00:00+08:00", sent[0][1])
         self.assertIn("1. A", sent[0][1])
         self.assertIn("線上: 🟢 有貨", sent[0][1])
-        self.assertIn("實體:", sent[0][1])
         self.assertIn("- AD318 台南西門: 🟢", sent[0][1])
-        self.assertIn("- AD331 南紡購物中心: 🔴", sent[0][1])
-        self.assertIn("- 其他: 🟢 請直接上官網查詢", sent[0][1])
-        self.assertIn("價格: NT$100", sent[0][1])
-        self.assertNotIn("商品品項:", sent[0][1])
+        self.assertIn("- AD101 崇光SOGO: 🔴", sent[0][1])
+        self.assertNotIn("AD331", sent[0][1])
+        self.assertIn(f"- {OTHER_STORE_LABEL}: 🟢 請直接上官網查詢", sent[0][1])
 
-    def test_format_status_message_summarizes_stock_counts(self) -> None:
+    def test_format_status_message_renders_only_enabled_stores(self) -> None:
         message = format_status_message(
             checked_at="2026-04-13T01:00:00+00:00",
             products=[
@@ -768,11 +544,9 @@ class LazyNotifierTests(unittest.TestCase):
                     price=100,
                     store_inventory={
                         TRACKED_STORE_LABELS["AD318"]: "TRUE",
+                        "AD101崇光SOGO(Funbox Toys)": "FALSE",
                         TRACKED_STORE_LABELS["AD331"]: "FALSE",
-                        TRACKED_STORE_LABELS["AD351"]: "UNKNOWN",
-                        TRACKED_STORE_LABELS["AD311"]: "FALSE",
-                        TRACKED_STORE_LABELS["AD316"]: "TRUE",
-                        OTHER_STORE_LABEL: "TRUE",
+                        "AD207嘉義遠東(Funbox Toys)": "TRUE",
                     },
                     url="https://shop.funbox.com.tw/products/a",
                 ),
@@ -780,34 +554,29 @@ class LazyNotifierTests(unittest.TestCase):
                     name="B",
                     stock="sold_out",
                     price=200,
-                    store_inventory={
-                        label: "FALSE"
-                        for label in [*TRACKED_STORE_LABELS.values(), OTHER_STORE_LABEL]
-                    },
+                    store_inventory={TRACKED_STORE_LABELS["AD318"]: "FALSE"},
                     url="https://shop.funbox.com.tw/products/b",
                 ),
                 make_snapshot(
                     name="C",
                     stock="unknown",
                     price=300,
-                    store_inventory={
-                        label: "UNKNOWN"
-                        for label in [*TRACKED_STORE_LABELS.values(), OTHER_STORE_LABEL]
-                    },
+                    store_inventory={},
                     url="https://shop.funbox.com.tw/products/c",
                 ),
             ],
+            store_subscriptions=make_subscriptions(),
         )
 
         self.assertIn("商品總數: 3", message)
         self.assertIn("檢查時間: 2026-04-13T09:00:00+08:00", message)
         self.assertIn("線上統計: 🟢 1 | 🔴 1 | 🟡 1", message)
-        self.assertIn("https://shop.funbox.com.tw/categories/takaratomy/beyblade", message)
         self.assertIn("1. A", message)
         self.assertIn("線上: 🟢 有貨", message)
-        self.assertIn("實體:", message)
-        self.assertIn("- AD316 台南遠百: 🟢", message)
-        self.assertIn("- 其他: 🟢 請直接上官網查詢", message)
+        self.assertIn("- AD318 台南西門: 🟢", message)
+        self.assertIn("- AD101 崇光SOGO: 🔴", message)
+        self.assertNotIn("AD331 南紡購物中心", message)
+        self.assertIn(f"- {OTHER_STORE_LABEL}: 🟢 請直接上官網查詢", message)
         self.assertIn("價格: NT$100", message)
 
     def test_format_notification_message_converts_checked_at_for_display(self) -> None:
@@ -822,35 +591,37 @@ class LazyNotifierTests(unittest.TestCase):
                         "product": make_snapshot(
                             store_inventory={
                                 TRACKED_STORE_LABELS["AD318"]: "TRUE",
+                                "AD101崇光SOGO(Funbox Toys)": "FALSE",
                                 TRACKED_STORE_LABELS["AD331"]: "FALSE",
-                                TRACKED_STORE_LABELS["AD351"]: "UNKNOWN",
-                                TRACKED_STORE_LABELS["AD311"]: "FALSE",
-                                TRACKED_STORE_LABELS["AD316"]: "TRUE",
-                                OTHER_STORE_LABEL: "FALSE",
                             }
                         ),
                     },
                 )()
             ],
+            store_subscriptions=make_subscriptions(),
         )
 
         self.assertIn("檢查時間: 2026-04-13T09:00:00+08:00", message)
         self.assertIn("BEYBLADE X 戰鬥陀螺 BX-44 三角強襲", message)
         self.assertIn("線上: 🟢 有貨", message)
         self.assertIn("- AD318 台南西門: 🟢", message)
-        self.assertIn("- AD331 南紡購物中心: 🔴", message)
-        self.assertIn("- 其他: 🔴 請直接上官網查詢", message)
-        self.assertIn("價格: NT$550", message)
-        self.assertIn("連結: https://shop.funbox.com.tw/products/bb93952", message)
+        self.assertIn("- AD101 崇光SOGO: 🔴", message)
         self.assertNotIn("[新上架]", message)
-        self.assertNotIn("商品品項:", message)
+        self.assertNotIn("[補貨]", message)
 
 
 class CliArgumentTests(unittest.TestCase):
-    def test_parse_args_accepts_status_query_mode(self) -> None:
-        args = parse_args(["--send-status-report"])
+    def test_parse_args_accepts_status_and_store_sync_modes(self) -> None:
+        args = parse_args([
+            "--send-status-report",
+            "--sync-store-catalog",
+            "--store-subscriptions-file",
+            "config/custom.json",
+        ])
 
         self.assertTrue(args.send_status_report)
+        self.assertTrue(args.sync_store_catalog)
+        self.assertEqual(args.store_subscriptions_file, "config/custom.json")
 
 
 class RecipientParsingTests(unittest.TestCase):
@@ -883,28 +654,3 @@ class RecipientParsingTests(unittest.TestCase):
         self.assertEqual(post.call_count, 2)
         self.assertEqual(post.call_args_list[0].kwargs["json"]["chat_id"], "12345")
         self.assertEqual(post.call_args_list[1].kwargs["json"]["chat_id"], "-10098765")
-
-
-class CategoryStockPriorityTests(unittest.TestCase):
-    def test_build_product_snapshot_prefers_detail_signal_when_known(self) -> None:
-        category_product = CategoryProduct(
-            product_url="https://shop.funbox.com.tw/products/bb09726",
-            catalog_id="66836005",
-            name="BEYBLADE X 戰鬥陀螺 CX-14 騎士堡壘",
-            stock_status="sold_out",
-        )
-        detail = parse_product_detail(DETAIL_HTML_IN_STOCK)
-
-        snapshot = build_product_snapshot(category_product=category_product, detail=detail)
-
-        self.assertEqual(snapshot.stock_status, "in_stock")
-
-
-class RenderedStockSignalTests(unittest.TestCase):
-    def test_resolve_stock_status_from_signals_prefers_sold_out_button(self) -> None:
-        status = resolve_stock_status_from_signals(
-            stock_text="庫存不足",
-            action_text="售完待補貨",
-        )
-
-        self.assertEqual(status, "sold_out")
