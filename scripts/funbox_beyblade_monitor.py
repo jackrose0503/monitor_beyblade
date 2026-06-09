@@ -11,6 +11,7 @@ from email.message import EmailMessage
 from html import unescape
 from pathlib import Path
 from typing import Callable, Literal
+
 try:
     import requests
 except ImportError:  # pragma: no cover - optional at test time
@@ -29,8 +30,10 @@ except ImportError:  # pragma: no cover - optional at test time
 
 DEFAULT_CATEGORY_URL = "https://shop.funbox.com.tw/categories/takaratomy/beyblade"
 DEFAULT_STATE_FILE = "monitor-state/state/funbox-beyblade.json"
+DEFAULT_STORE_SUBSCRIPTIONS_FILE = "config/store_subscriptions.json"
 DEFAULT_TIMEOUT_SECONDS = 30
 DISPLAY_TIMEZONE = timezone(timedelta(hours=8))
+OTHER_STORE_LABEL = "其他"
 
 StockStatus = Literal["in_stock", "sold_out", "unknown"]
 StoreInventoryStatus = Literal["TRUE", "FALSE", "UNKNOWN"]
@@ -41,15 +44,6 @@ TRACKED_STORE_LABELS = {
     "AD351": "AD351台南三井(Funbox Toys)",
     "AD311": "AD311台南三越(Funbox Toys)",
     "AD316": "AD316台南遠百(Funbox Toys)",
-}
-OTHER_STORE_LABEL = "其他"
-STORE_DISPLAY_LABELS = {
-    TRACKED_STORE_LABELS["AD318"]: "AD318 台南西門",
-    TRACKED_STORE_LABELS["AD331"]: "AD331 南紡購物中心",
-    TRACKED_STORE_LABELS["AD351"]: "AD351 台南三井",
-    TRACKED_STORE_LABELS["AD311"]: "AD311 台南三越",
-    TRACKED_STORE_LABELS["AD316"]: "AD316 台南遠百",
-    OTHER_STORE_LABEL: "其他",
 }
 
 
@@ -128,6 +122,65 @@ class RunResult:
     events: list[ProductEvent]
 
 
+@dataclass(frozen=True)
+class StoreSubscription:
+    store_code: str
+    store_label: str
+    enabled: bool = False
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "store_code": self.store_code,
+            "store_label": self.store_label,
+            "enabled": self.enabled,
+        }
+
+
+@dataclass(frozen=True)
+class StoreSubscriptions:
+    include_other: bool
+    stores: list[StoreSubscription]
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, object]) -> "StoreSubscriptions":
+        include_other = _coerce_bool(payload.get("include_other", True))
+        stores_by_code: dict[str, StoreSubscription] = {}
+        for item in payload.get("stores", []):
+            if not isinstance(item, dict):
+                continue
+            store_code = _extract_store_code(
+                str(item.get("store_code") or item.get("store_label") or "")
+            )
+            store_label = _canonicalize_store_label(
+                str(item.get("store_label") or item.get("store_code") or "")
+            )
+            if not store_code or not store_label:
+                continue
+            stores_by_code[store_code] = StoreSubscription(
+                store_code=store_code,
+                store_label=store_label,
+                enabled=_coerce_bool(item.get("enabled", False)),
+            )
+        stores = sorted(stores_by_code.values(), key=lambda item: _sort_store_code(item.store_code))
+        return cls(include_other=include_other, stores=stores)
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "include_other": self.include_other,
+            "stores": [store.to_dict() for store in self.stores],
+        }
+
+
+def default_store_subscriptions() -> StoreSubscriptions:
+    return StoreSubscriptions(
+        include_other=True,
+        stores=[
+            StoreSubscription(store_code=code, store_label=label, enabled=True)
+            for code, label in sorted(TRACKED_STORE_LABELS.items(), key=lambda item: _sort_store_code(item[0]))
+        ],
+    )
+
+
 class NotificationError(RuntimeError):
     pass
 
@@ -147,6 +200,27 @@ class JsonStateStore:
         self.state_file.parent.mkdir(parents=True, exist_ok=True)
         self.state_file.write_text(
             json.dumps(state.to_dict(), ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+
+class JsonStoreSubscriptionsStore:
+    def __init__(self, subscriptions_file: Path) -> None:
+        self.subscriptions_file = subscriptions_file
+
+    def load(self) -> StoreSubscriptions:
+        if not self.subscriptions_file.exists():
+            return default_store_subscriptions()
+
+        payload = json.loads(self.subscriptions_file.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            return default_store_subscriptions()
+        return StoreSubscriptions.from_dict(payload)
+
+    def save(self, subscriptions: StoreSubscriptions) -> None:
+        self.subscriptions_file.parent.mkdir(parents=True, exist_ok=True)
+        self.subscriptions_file.write_text(
+            json.dumps(subscriptions.to_dict(), ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
 
@@ -213,11 +287,18 @@ class MonitorRunner:
         fetch_current_products: Callable[[], list[ProductSnapshot]],
         send_notification: Callable[[str, str], None],
         now: Callable[[], str],
+        render_notification: Callable[[list[ProductEvent], str], str] | None = None,
     ) -> None:
         self.state_store = state_store
         self.fetch_current_products = fetch_current_products
         self.send_notification = send_notification
         self.now = now
+        self.render_notification = render_notification or (
+            lambda events, checked_at: format_notification_message(
+                events=events,
+                checked_at=checked_at,
+            )
+        )
 
     def run(self, *, reset_baseline: bool) -> RunResult:
         checked_at = self.now()
@@ -256,7 +337,7 @@ class MonitorRunner:
                 events=[],
             )
 
-        message = format_notification_message(events=events, checked_at=checked_at)
+        message = self.render_notification(events, checked_at)
         _send_both_notifications(self.send_notification, message)
         self.state_store.save(next_state)
         return RunResult(
@@ -392,12 +473,12 @@ def _fetch_category_products_with_page(page: object, category_url: str) -> list[
               node.querySelector('img')?.getAttribute('alt'),
               card.textContent,
             ]
-              .map((value) => (value || '').replace(/\\s+/g, ' ').trim())
+              .map((value) => (value || '').replace(/\s+/g, ' ').trim())
               .filter(Boolean);
             const name = candidates.sort((a, b) => b.length - a.length)[0] || href.split('/').pop();
-            const stockText = (card.textContent || '').replace(/\\s+/g, ' ').trim();
+            const stockText = (card.textContent || '').replace(/\s+/g, ' ').trim();
             const dataset = Object.assign({}, card.dataset || {}, node.dataset || {});
-            const catalogId = Object.values(dataset).find((value) => /^\\d+$/.test(String(value || ''))) || '';
+            const catalogId = Object.values(dataset).find((value) => /^\d+$/.test(String(value || ''))) || '';
             if (!seen.has(href) || seen.get(href).name.length < name.length) {
               let stockStatus = 'unknown';
               if (/商品已售完|售完待補貨|庫存不足|已售完|缺貨/.test(stockText)) {
@@ -433,7 +514,7 @@ def fetch_product_detail_with_page(page: object, product_url: str) -> ProductDet
     payload = page.evaluate(
         """
         () => {
-          const text = (value) => (value || '').replace(/\\s+/g, ' ').trim();
+          const text = (value) => (value || '').replace(/\s+/g, ' ').trim();
           const visible = (element) =>
             Boolean(element && (element.offsetWidth || element.offsetHeight || element.getClientRects().length));
           const disabled = (element) => {
@@ -510,6 +591,65 @@ def fetch_url_text(url: str) -> str:
     return response.text
 
 
+def sync_store_catalog(
+    *,
+    category_url: str,
+    subscriptions_store: JsonStoreSubscriptionsStore,
+) -> tuple[StoreSubscriptions, list[ProductSnapshot]]:
+    products = fetch_current_products(category_url)
+    if not products:
+        raise ValueError("Category fetch returned 0 products; cannot sync store catalog.")
+    existing = subscriptions_store.load()
+    synced = build_synced_store_subscriptions(existing, products)
+    subscriptions_store.save(synced)
+    return synced, products
+
+
+def build_synced_store_subscriptions(
+    existing: StoreSubscriptions,
+    products: list[ProductSnapshot],
+) -> StoreSubscriptions:
+    discovered_catalog = build_store_catalog_from_products(products)
+    existing_by_code = {store.store_code: store for store in existing.stores}
+    merged_codes = sorted(
+        set(discovered_catalog) | set(existing_by_code),
+        key=_sort_store_code,
+    )
+    merged_stores = []
+    for code in merged_codes:
+        existing_store = existing_by_code.get(code)
+        store_label = discovered_catalog.get(code, existing_store.store_label if existing_store else code)
+        merged_stores.append(
+            StoreSubscription(
+                store_code=code,
+                store_label=store_label,
+                enabled=existing_store.enabled if existing_store is not None else False,
+            )
+        )
+    return StoreSubscriptions(include_other=existing.include_other, stores=merged_stores)
+
+
+def build_store_catalog_from_products(products: list[ProductSnapshot]) -> dict[str, str]:
+    catalog: dict[str, str] = {}
+    for product in products:
+        for label in _normalize_store_inventory_summary(product.store_inventory):
+            if label == OTHER_STORE_LABEL:
+                continue
+            store_code = _extract_store_code(label)
+            if not store_code:
+                continue
+            candidate_label = _canonicalize_store_label(label)
+            current_label = catalog.get(store_code)
+            if current_label is None:
+                catalog[store_code] = candidate_label
+                continue
+            catalog[store_code] = _prefer_store_label(current_label, candidate_label)
+    return {
+        code: catalog[code]
+        for code in sorted(catalog, key=_sort_store_code)
+    }
+
+
 def _goto_page_with_ready_dom(page: object, url: str) -> None:
     last_error: Exception | None = None
     for wait_until in ("domcontentloaded", "load"):
@@ -522,25 +662,53 @@ def _goto_page_with_ready_dom(page: object, url: str) -> None:
         raise last_error
 
 
-def format_notification_message(*, events: list[ProductEvent], checked_at: str) -> str:
+def format_notification_message(
+    *,
+    events: list[ProductEvent],
+    checked_at: str,
+    store_subscriptions: StoreSubscriptions | None = None,
+) -> str:
     display_checked_at = _format_display_timestamp(checked_at)
     new_listing_count = sum(1 for event in events if event.event_type == "new_listing")
     restock_count = sum(1 for event in events if event.event_type == "restock")
     lines = [
-        f"Funbox Beyblade 監控通知",
+        "Funbox Beyblade 監控通知",
         f"檢查時間: {display_checked_at}",
         f"事件數量: {len(events)}",
         f"異動統計: 新上架 {new_listing_count} | 補貨 {restock_count}",
         "",
     ]
     for event in events:
-        lines.extend(_format_product_lines(event.product))
+        lines.extend(_format_product_lines(event.product, store_subscriptions=store_subscriptions))
         lines.append("")
     return "\n".join(lines).strip()
 
 
 def main() -> int:
     args = parse_args()
+    subscriptions_store = JsonStoreSubscriptionsStore(Path(args.store_subscriptions_file))
+
+    if args.sync_store_catalog:
+        synced_subscriptions, products = sync_store_catalog(
+            category_url=args.category_url,
+            subscriptions_store=subscriptions_store,
+        )
+        checked_at = current_timestamp()
+        print(
+            json.dumps(
+                {
+                    "mode": "store_catalog_synced",
+                    "checked_at": checked_at,
+                    "product_count": len(products),
+                    "store_count": len(synced_subscriptions.stores),
+                    "enabled_store_count": sum(1 for store in synced_subscriptions.stores if store.enabled),
+                },
+                ensure_ascii=False,
+            )
+        )
+        return 0
+
+    store_subscriptions = subscriptions_store.load()
     send_notification = build_lazy_notification_sender(EnvNotifier)
     if args.send_status_report:
         products = fetch_current_products(args.category_url)
@@ -551,6 +719,8 @@ def main() -> int:
             send_notification=send_notification,
             checked_at=checked_at,
             products=products,
+            category_url=args.category_url,
+            store_subscriptions=store_subscriptions,
         )
         print(
             json.dumps(
@@ -570,6 +740,11 @@ def main() -> int:
         fetch_current_products=lambda: fetch_current_products(args.category_url),
         send_notification=send_notification,
         now=current_timestamp,
+        render_notification=lambda events, checked_at: format_notification_message(
+            events=events,
+            checked_at=checked_at,
+            store_subscriptions=store_subscriptions,
+        ),
     )
     result = runner.run(reset_baseline=args.reset_baseline)
     print(
@@ -590,8 +765,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Monitor Funbox Beyblade listings for new products and restocks.")
     parser.add_argument("--category-url", default=DEFAULT_CATEGORY_URL)
     parser.add_argument("--state-file", default=DEFAULT_STATE_FILE)
+    parser.add_argument("--store-subscriptions-file", default=DEFAULT_STORE_SUBSCRIPTIONS_FILE)
     parser.add_argument("--reset-baseline", action="store_true")
     parser.add_argument("--send-status-report", action="store_true")
+    parser.add_argument("--sync-store-catalog", action="store_true")
     return parser.parse_args(argv)
 
 
@@ -616,20 +793,33 @@ def run_send_status_report(
     send_notification: Callable[[str, str], None],
     checked_at: str,
     products: list[ProductSnapshot],
+    category_url: str = DEFAULT_CATEGORY_URL,
+    store_subscriptions: StoreSubscriptions | None = None,
 ) -> None:
-    message = format_status_message(checked_at=checked_at, products=products)
+    message = format_status_message(
+        checked_at=checked_at,
+        products=products,
+        category_url=category_url,
+        store_subscriptions=store_subscriptions,
+    )
     for channel in ("telegram", "email"):
         send_notification(channel, message)
 
 
-def format_status_message(*, checked_at: str, products: list[ProductSnapshot]) -> str:
+def format_status_message(
+    *,
+    checked_at: str,
+    products: list[ProductSnapshot],
+    category_url: str = DEFAULT_CATEGORY_URL,
+    store_subscriptions: StoreSubscriptions | None = None,
+) -> str:
     display_checked_at = _format_display_timestamp(checked_at)
     in_stock = sum(1 for product in products if product.stock_status == "in_stock")
     sold_out = sum(1 for product in products if product.stock_status == "sold_out")
     unknown = sum(1 for product in products if product.stock_status == "unknown")
     lines = [
         "Funbox Beyblade 目前網站狀態",
-        f"分類頁: {DEFAULT_CATEGORY_URL}",
+        f"分類頁: {category_url}",
         f"檢查時間: {display_checked_at}",
         f"商品總數: {len(products)}",
         f"線上統計: 🟢 {in_stock} | 🔴 {sold_out} | 🟡 {unknown}",
@@ -637,7 +827,13 @@ def format_status_message(*, checked_at: str, products: list[ProductSnapshot]) -
         "前 10 項商品:",
     ]
     for index, product in enumerate(products[:10], start=1):
-        lines.extend(_format_product_lines(product, index=index))
+        lines.extend(
+            _format_product_lines(
+                product,
+                index=index,
+                store_subscriptions=store_subscriptions,
+            )
+        )
         lines.append("")
     return "\n".join(lines).strip()
 
@@ -666,16 +862,20 @@ def _format_display_timestamp(timestamp: str) -> str:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(DISPLAY_TIMEZONE).isoformat()
-def _format_product_lines(product: ProductSnapshot, *, index: int | None = None) -> list[str]:
-    store_inventory_lines = ["實體:"]
-    store_inventory_lines.extend(
-        _format_store_inventory_lines(product.store_inventory or _default_store_inventory_summary())
-    )
+
+
+def _format_product_lines(
+    product: ProductSnapshot,
+    *,
+    index: int | None = None,
+    store_subscriptions: StoreSubscriptions | None = None,
+) -> list[str]:
     title = product.name if index is None else f"{index}. {product.name}"
     lines = [
         title,
         f"線上: {_format_online_stock(product.stock_status)}",
-        *store_inventory_lines,
+        "實體:",
+        *_format_store_inventory_lines(product.store_inventory, store_subscriptions=store_subscriptions),
         f"價格: {_format_price(product.price_twd)}",
         f"連結: {product.product_url}",
     ]
@@ -696,16 +896,37 @@ def _format_price(price_twd: int | None) -> str:
 
 def _format_store_inventory_lines(
     store_inventory: dict[str, StoreInventoryStatus],
+    *,
+    store_subscriptions: StoreSubscriptions | None = None,
 ) -> list[str]:
-    normalized = _normalize_store_inventory_summary(store_inventory)
-    lines = [
-        f"- {STORE_DISPLAY_LABELS[label]}: {_format_store_inventory_status(normalized[label])}"
-        for label in TRACKED_STORE_LABELS.values()
-    ]
-    lines.append(
-        f"- {STORE_DISPLAY_LABELS[OTHER_STORE_LABEL]}: "
-        f"{_format_store_inventory_status(normalized[OTHER_STORE_LABEL])} 請直接上官網查詢"
-    )
+    subscriptions = store_subscriptions or default_store_subscriptions()
+    inventory_by_code, legacy_other_statuses = _index_store_inventory_by_code(store_inventory)
+    enabled_stores = [store for store in subscriptions.stores if store.enabled]
+    lines: list[str] = []
+
+    if enabled_stores:
+        for store in enabled_stores:
+            inventory_entry = inventory_by_code.get(store.store_code)
+            status = inventory_entry[1] if inventory_entry is not None else "UNKNOWN"
+            lines.append(
+                f"- {_short_store_display_label(store.store_label)}: {_format_store_inventory_status(status)}"
+            )
+    else:
+        lines.append("- 未設定訂閱門市")
+
+    if subscriptions.include_other:
+        enabled_codes = {store.store_code for store in enabled_stores}
+        other_statuses = [
+            status
+            for code, (_, status) in inventory_by_code.items()
+            if code not in enabled_codes
+        ]
+        other_statuses.extend(legacy_other_statuses)
+        other_status = _aggregate_other_store_statuses(other_statuses)
+        lines.append(
+            f"- {OTHER_STORE_LABEL}: {_format_store_inventory_status(other_status)} 請直接上官網查詢"
+        )
+
     return lines
 
 
@@ -731,83 +952,56 @@ def _fetch_store_inventory_rows_with_page(page: object) -> list[dict[str, str]]:
     _click_locator_with_force_fallback(inventory_trigger)
     page.wait_for_timeout(500)
 
-    south_tab = _first_present_locator(
-        page,
-        [
-            'a[role="tab"]:has-text("南區"):not([id^="mobile_"])',
-            'a[href="#inventory_quantities_tab_content-3"]',
-            '#inventory_quantities_tab-3',
-            'text=南區',
-            'button:has-text("南區")',
-            '[role="tab"]:has-text("南區")',
-        ],
-    )
-    if south_tab is not None:
-        if _click_locator_with_force_fallback(south_tab, tolerate_failure=True):
-            page.wait_for_timeout(500)
-
     payload = page.evaluate(
         """
         () => {
-          const text = (value) => (value || '').replace(/\\s+/g, ' ').trim();
-          const visible = (element) =>
-            Boolean(element && (element.offsetWidth || element.offsetHeight || element.getClientRects().length));
-          const paneCandidates = Array.from(document.querySelectorAll('[id*="inventory_quantities_tab_content"], .tab-pane'))
-            .map((element) => ({
-              id: element.id || '',
-              text: element.innerText || element.textContent || '',
-              visible: visible(element),
-              active: element.classList.contains('active'),
-            }))
-            .filter((candidate) => /AD\\d{3}/.test(text(candidate.text || '')));
-          const activePane =
-            Array.from(document.querySelectorAll('[id*="inventory_quantities_tab_content"].active, .tab-pane.active'))
-              .find((element) => visible(element) && /AD\\d{3}/.test(text(element.textContent || ''))) ||
-            Array.from(document.querySelectorAll('[id*="inventory_quantities_tab_content"], .tab-pane'))
-              .find((element) => visible(element) && /AD\\d{3}/.test(text(element.textContent || ''))) ||
-            document.body;
-          const paneText = activePane ? (activePane.innerText || activePane.textContent || '') : '';
-          const storeElements = Array.from(activePane.querySelectorAll('tr, li, .row, [class*="inventory"], [class*="store"]'))
-            .filter((element) => {
-              if (!visible(element)) return false;
-              const value = text(element.textContent || '');
-              return /AD\\d{3}/.test(value);
-            });
+          const text = (value) => (value || '').replace(/\s+/g, ' ').trim();
+          const paneElements = Array.from(document.querySelectorAll('[id*="inventory_quantities_tab_content"], .tab-pane'))
+            .filter((element) => /AD\d{3}/.test(text(element.textContent || '')));
+          const rowContainers = paneElements.length ? paneElements : [document.body];
           const seen = new Map();
-          for (const element of storeElements) {
-            const value = text(element.textContent || '');
-            const cells = Array.from(element.querySelectorAll('th, td')).filter((cell) => visible(cell));
-            let storeText = '';
-            let statusText = '';
-            let statusHtml = '';
 
-            if (cells.length >= 2 && /AD\\d{3}/.test(text(cells[0].textContent || ''))) {
-              storeText = text(cells[0].textContent || '');
-              const statusCell = cells[cells.length - 1];
-              statusText = text(statusCell.textContent || '');
-              statusHtml = statusCell.innerHTML || '';
-            } else {
-              const match = value.match(/(AD\\d{3}[^○△✕×]*?)(?:\\s+|)([○△✕×]|熱賣中|即將完售|缺貨中|缺貨|售完|無庫存)?/);
-              if (!match) continue;
-              storeText = text(match[1]);
-              statusText = text(match[2] || '');
-              statusHtml = element.innerHTML || '';
-            }
+          for (const container of rowContainers) {
+            const storeElements = Array.from(container.querySelectorAll('tr, li, .row, [class*="inventory"], [class*="store"]'));
+            for (const element of storeElements) {
+              const value = text(element.textContent || '');
+              if (!/AD\d{3}/.test(value)) continue;
 
-            const storeCodeMatch = storeText.match(/AD\\d{3}/);
-            const key = storeCodeMatch ? storeCodeMatch[0] : storeText;
-            if (!seen.has(key)) {
-              seen.set(key, {
-                store_text: storeText,
-                status_text: statusText,
-                row_html: statusHtml,
-              });
+              const cells = Array.from(element.querySelectorAll('th, td'));
+              let storeText = '';
+              let statusText = '';
+              let statusHtml = '';
+
+              if (cells.length >= 2 && /AD\d{3}/.test(text(cells[0].textContent || ''))) {
+                storeText = text(cells[0].textContent || '');
+                const statusCell = cells[cells.length - 1];
+                statusText = text(statusCell.textContent || '');
+                statusHtml = statusCell.innerHTML || '';
+              } else {
+                const match = value.match(/(AD\d{3}.*?)(?:\s+|)([○△✕×]|熱賣中|即將完售|缺貨中|缺貨|售完|無庫存)?$/);
+                if (!match) continue;
+                storeText = text(match[1] || '');
+                statusText = text(match[2] || '');
+                statusHtml = element.innerHTML || '';
+              }
+
+              const storeCodeMatch = storeText.match(/AD\d{3}/);
+              const key = storeCodeMatch ? storeCodeMatch[0] : storeText;
+              if (!seen.has(key)) {
+                seen.set(key, {
+                  store_text: storeText,
+                  status_text: statusText,
+                  row_html: statusHtml,
+                });
+              }
             }
           }
 
           return {
-            pane_text: paneText,
-            pane_candidates: paneCandidates,
+            pane_candidates: paneElements.map((element) => ({
+              id: element.id || '',
+              text: element.innerText || element.textContent || '',
+            })),
             rows: Array.from(seen.values()),
           };
         }
@@ -818,13 +1012,31 @@ def _fetch_store_inventory_rows_with_page(page: object) -> list[dict[str, str]]:
     if not isinstance(payload, dict):
         return []
 
-    selected_pane_text = _select_store_inventory_pane_text(payload)
-    text_rows = _extract_store_inventory_rows_from_text(selected_pane_text)
-    if text_rows:
-        return text_rows
+    extracted_rows = _extract_all_store_inventory_rows_from_payload(payload)
+    if extracted_rows:
+        return extracted_rows
 
     fallback_rows = payload.get("rows")
     return fallback_rows if isinstance(fallback_rows, list) else []
+
+
+def _extract_all_store_inventory_rows_from_payload(payload: dict[str, object]) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    pane_candidates = payload.get("pane_candidates")
+    if isinstance(pane_candidates, list):
+        for candidate in pane_candidates:
+            if not isinstance(candidate, dict):
+                continue
+            rows.extend(_extract_store_inventory_rows_from_text(str(candidate.get("text", ""))))
+
+    pane_text = payload.get("pane_text")
+    if isinstance(pane_text, str):
+        rows.extend(_extract_store_inventory_rows_from_text(pane_text))
+
+    fallback_rows = payload.get("rows")
+    if isinstance(fallback_rows, list):
+        rows.extend(item for item in fallback_rows if isinstance(item, dict))
+    return rows
 
 
 def _click_locator_with_force_fallback(locator: object, *, tolerate_failure: bool = False) -> bool:
@@ -839,34 +1051,6 @@ def _click_locator_with_force_fallback(locator: object, *, tolerate_failure: boo
             if tolerate_failure:
                 return False
             raise
-
-
-def _select_store_inventory_pane_text(payload: dict[str, object]) -> str:
-    candidates = payload.get("pane_candidates")
-    best_text = ""
-    best_score = (-1, -1, -1, -1, -1)
-    if isinstance(candidates, list):
-        for candidate in candidates:
-            if not isinstance(candidate, dict):
-                continue
-            text_blob = str(candidate.get("text", ""))
-            if not re.search(r"AD\d{3}", text_blob):
-                continue
-            tracked_hits = sum(1 for code in TRACKED_STORE_LABELS if code in text_blob)
-            total_codes = len(set(re.findall(r"AD\d{3}", text_blob)))
-            score = (
-                tracked_hits,
-                int(bool(candidate.get("visible"))),
-                int(bool(candidate.get("active"))),
-                total_codes,
-                len(text_blob),
-            )
-            if score > best_score:
-                best_score = score
-                best_text = text_blob
-    if best_text:
-        return best_text
-    return str(payload.get("pane_text", ""))
 
 
 def _extract_store_inventory_rows_from_text(text_blob: str) -> list[dict[str, str]]:
@@ -933,23 +1117,21 @@ def _first_present_locator(page: object, selectors: list[str]) -> object | None:
 
 
 def _default_store_inventory_summary() -> dict[str, StoreInventoryStatus]:
-    return {
-        label: "UNKNOWN"
-        for label in [*TRACKED_STORE_LABELS.values(), OTHER_STORE_LABEL]
-    }
+    return {}
 
 
 def _normalize_store_inventory_summary(
     payload: object,
 ) -> dict[str, StoreInventoryStatus]:
-    summary = _default_store_inventory_summary()
+    summary: dict[str, StoreInventoryStatus] = {}
     if not isinstance(payload, dict):
         return summary
 
     for key, value in payload.items():
-        label = str(key)
-        if label in summary:
-            summary[label] = _normalize_store_inventory_status(str(value))
+        label = _canonicalize_store_label(str(key))
+        if not label:
+            continue
+        summary[label] = _normalize_store_inventory_status(str(value))
     return summary
 
 
@@ -963,16 +1145,15 @@ def _normalize_store_inventory_status(value: str) -> StoreInventoryStatus:
 def _summarize_store_inventory_rows(
     rows: object,
 ) -> dict[str, StoreInventoryStatus]:
-    summary = _default_store_inventory_summary()
-    other_statuses: list[StoreInventoryStatus] = []
+    summary_by_code: dict[str, tuple[str, StoreInventoryStatus]] = {}
     if not isinstance(rows, list):
-        return summary
+        return {}
 
     for row in rows:
         if not isinstance(row, dict):
             continue
 
-        store_text = str(row.get("store_text", ""))
+        store_text = _canonicalize_store_label(str(row.get("store_text", "")))
         status = _resolve_store_inventory_status(
             status_text=str(row.get("status_text", "")),
             row_html=str(row.get("row_html", "")),
@@ -980,15 +1161,46 @@ def _summarize_store_inventory_rows(
         store_code = _extract_store_code(store_text)
         if store_code is None:
             continue
-        if store_code in TRACKED_STORE_LABELS:
-            label = TRACKED_STORE_LABELS[store_code]
-            summary[label] = _prefer_store_inventory_status(summary[label], status)
-            continue
-        other_statuses.append(status)
 
-    if other_statuses:
-        summary[OTHER_STORE_LABEL] = _aggregate_other_store_statuses(other_statuses)
-    return summary
+        current = summary_by_code.get(store_code)
+        if current is None:
+            summary_by_code[store_code] = (store_text, status)
+            continue
+
+        current_label, current_status = current
+        summary_by_code[store_code] = (
+            _prefer_store_label(current_label, store_text),
+            _prefer_store_inventory_status(current_status, status),
+        )
+
+    return {
+        label: status
+        for _, (label, status) in sorted(summary_by_code.items(), key=lambda item: _sort_store_code(item[0]))
+    }
+
+
+def _index_store_inventory_by_code(
+    store_inventory: dict[str, StoreInventoryStatus],
+) -> tuple[dict[str, tuple[str, StoreInventoryStatus]], list[StoreInventoryStatus]]:
+    inventory_by_code: dict[str, tuple[str, StoreInventoryStatus]] = {}
+    legacy_other_statuses: list[StoreInventoryStatus] = []
+    for label, status in _normalize_store_inventory_summary(store_inventory).items():
+        if label == OTHER_STORE_LABEL:
+            legacy_other_statuses.append(status)
+            continue
+        store_code = _extract_store_code(label)
+        if not store_code:
+            continue
+        current = inventory_by_code.get(store_code)
+        if current is None:
+            inventory_by_code[store_code] = (label, status)
+            continue
+        current_label, current_status = current
+        inventory_by_code[store_code] = (
+            _prefer_store_label(current_label, label),
+            _prefer_store_inventory_status(current_status, status),
+        )
+    return inventory_by_code, legacy_other_statuses
 
 
 def _resolve_store_inventory_status(
@@ -1051,6 +1263,41 @@ def _extract_store_code(store_text: str) -> str | None:
     return None
 
 
+def _canonicalize_store_label(store_text: str) -> str:
+    value = re.sub(r"\s+", " ", store_text).strip()
+    if not value:
+        return ""
+    if value == OTHER_STORE_LABEL:
+        return OTHER_STORE_LABEL
+    match = re.search(r"(AD\d{3}.*?\))", value)
+    if match:
+        return match.group(1).strip()
+    match = re.search(r"(AD\d{3}.*)", value)
+    if match:
+        return match.group(1).strip()
+    return value
+
+
+def _short_store_display_label(store_label: str) -> str:
+    canonical = _canonicalize_store_label(store_label)
+    match = re.match(r"(AD\d{3})(.*?)(?:\([^)]*\))?$", canonical)
+    if not match:
+        return canonical
+    store_code = match.group(1)
+    store_name = re.sub(r"\s+", " ", match.group(2)).strip()
+    if not store_name:
+        return store_code
+    return f"{store_code} {store_name}"
+
+
+def _prefer_store_label(current: str, candidate: str) -> str:
+    current_has_brand = "(" in current and ")" in current
+    candidate_has_brand = "(" in candidate and ")" in candidate
+    current_score = (int(current_has_brand), -len(current), current)
+    candidate_score = (int(candidate_has_brand), -len(candidate), candidate)
+    return candidate if candidate_score > current_score else current
+
+
 def _prefer_store_inventory_status(
     current: StoreInventoryStatus,
     candidate: StoreInventoryStatus,
@@ -1067,6 +1314,13 @@ def _aggregate_other_store_statuses(
     if any(status == "FALSE" for status in statuses):
         return "FALSE"
     return "UNKNOWN"
+
+
+def _sort_store_code(store_code: str) -> tuple[str, int, str]:
+    match = re.match(r"([A-Za-z]+)(\d+)", store_code)
+    if not match:
+        return (store_code, 0, store_code)
+    return (match.group(1), int(match.group(2)), store_code)
 
 
 def _extract_text(html: str) -> str:
@@ -1148,6 +1402,14 @@ def _extract_primary_stock_text(text: str) -> str:
     if not match:
         return ""
     return match.group(1).strip()
+
+
+def _coerce_bool(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
 
 
 def _require_env(key: str) -> str:
