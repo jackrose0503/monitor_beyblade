@@ -1,0 +1,30 @@
+{
+  "include_other": true,
+  "stores": [
+    {
+      "store_code": "AD311",
+      "store_label": "AD311台南三越(Funbox Toys)",
+      "enabled": true
+    },
+    {
+      "store_code": "AD316",
+      "store_label": "AD316台南遠百(Funbox Toys)",
+      "enabled": true
+    },
+    {
+      "store_code": "AD318",
+      "store_label": "AD318台南西門(Funbox Toys & Sanrio Gift Gate)",
+      "enabled": true
+    },
+    {
+      "store_code": "AD331",
+      "store_label": "AD331南紡購物中心(Funbox Toys)",
+      "enabled": true
+    },
+    {
+      "store_code": "AD351",
+      "store_label": "AD351台南三井(Funbox Toys)",
+      "enabled": true
+    }
+  ]
+}
