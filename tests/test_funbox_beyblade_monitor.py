@@ -526,7 +526,7 @@ class LazyNotifierTests(unittest.TestCase):
 
         self.assertEqual([channel for channel, _ in sent], ["telegram", "email"])
         self.assertIn("目前網站狀態", sent[0][1])
-        self.assertIn("檢查時間: 2026-04-13T09:00:00+08:00", sent[0][1])
+        self.assertIn("檢查時間: 2026-04-13 09:00:00 (UTC+8)", sent[0][1])
         self.assertIn("1. A", sent[0][1])
         self.assertIn("線上: 🟢 有貨", sent[0][1])
         self.assertIn("- AD318 台南西門: 🟢", sent[0][1])
@@ -569,7 +569,7 @@ class LazyNotifierTests(unittest.TestCase):
         )
 
         self.assertIn("商品總數: 3", message)
-        self.assertIn("檢查時間: 2026-04-13T09:00:00+08:00", message)
+        self.assertIn("檢查時間: 2026-04-13 09:00:00 (UTC+8)", message)
         self.assertIn("線上統計: 🟢 1 | 🔴 1 | 🟡 1", message)
         self.assertIn("1. A", message)
         self.assertIn("線上: 🟢 有貨", message)
@@ -601,7 +601,7 @@ class LazyNotifierTests(unittest.TestCase):
             store_subscriptions=make_subscriptions(),
         )
 
-        self.assertIn("檢查時間: 2026-04-13T09:00:00+08:00", message)
+        self.assertIn("檢查時間: 2026-04-13 09:00:00 (UTC+8)", message)
         self.assertIn("BEYBLADE X 戰鬥陀螺 BX-44 三角強襲", message)
         self.assertIn("線上: 🟢 有貨", message)
         self.assertIn("- AD318 台南西門: 🟢", message)
