@@ -377,7 +377,7 @@ def fetch_category_products(category_url: str) -> list[CategoryProduct]:
 
 
 def _fetch_category_products_with_page(page: object, category_url: str) -> list[CategoryProduct]:
-    page.goto(category_url, wait_until="networkidle", timeout=DEFAULT_TIMEOUT_SECONDS * 1000)
+    _goto_page_with_ready_dom(page, category_url)
     page.wait_for_timeout(2_000)
     items = page.locator('a[href*="/products/"]').evaluate_all(
         """
@@ -427,7 +427,7 @@ def _fetch_category_products_with_page(page: object, category_url: str) -> list[
 
 
 def fetch_product_detail_with_page(page: object, product_url: str) -> ProductDetail:
-    page.goto(product_url, wait_until="networkidle", timeout=DEFAULT_TIMEOUT_SECONDS * 1000)
+    _goto_page_with_ready_dom(page, product_url)
     page.wait_for_timeout(1_000)
     store_rows = _fetch_store_inventory_rows_with_page(page)
     payload = page.evaluate(
@@ -508,6 +508,18 @@ def fetch_url_text(url: str) -> str:
     )
     response.raise_for_status()
     return response.text
+
+
+def _goto_page_with_ready_dom(page: object, url: str) -> None:
+    last_error: Exception | None = None
+    for wait_until in ("domcontentloaded", "load"):
+        try:
+            page.goto(url, wait_until=wait_until, timeout=DEFAULT_TIMEOUT_SECONDS * 1000)
+            return
+        except Exception as exc:
+            last_error = exc
+    if last_error is not None:
+        raise last_error
 
 
 def format_notification_message(*, events: list[ProductEvent], checked_at: str) -> str:
