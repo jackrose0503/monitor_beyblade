@@ -33,6 +33,7 @@ DEFAULT_STATE_FILE = "monitor-state/state/funbox-beyblade.json"
 DEFAULT_STORE_SUBSCRIPTIONS_FILE = "config/store_subscriptions.json"
 DEFAULT_TIMEOUT_SECONDS = 30
 DISPLAY_TIMEZONE = timezone(timedelta(hours=8))
+DISPLAY_TIMEZONE_LABEL = "UTC+8"
 OTHER_STORE_LABEL = "其他"
 
 StockStatus = Literal["in_stock", "sold_out", "unknown"]
@@ -861,7 +862,8 @@ def _format_display_timestamp(timestamp: str) -> str:
 
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(DISPLAY_TIMEZONE).isoformat()
+    display_time = parsed.astimezone(DISPLAY_TIMEZONE)
+    return f"{display_time.strftime('%Y-%m-%d %H:%M:%S')} ({DISPLAY_TIMEZONE_LABEL})"
 
 
 def _format_product_lines(
