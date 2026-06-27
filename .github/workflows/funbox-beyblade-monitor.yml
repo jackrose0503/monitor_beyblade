@@ -174,7 +174,11 @@ jobs:
                       pass
                   page.wait_for_timeout(1_000 + attempt * 500)
           '''
-          text, replacements_count = category_function_pattern.subn(hardened_category_function, text, count=1)
+          text, replacements_count = category_function_pattern.subn(
+              lambda _match: hardened_category_function,
+              text,
+              count=1,
+          )
           if replacements_count != 1:
               raise SystemExit("Category function patch target not found")
 
