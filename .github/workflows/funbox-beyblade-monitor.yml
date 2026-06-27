@@ -55,6 +55,7 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           path = Path("scripts/funbox_beyblade_monitor.py")
           text = path.read_text(encoding="utf-8")
@@ -68,7 +69,7 @@ jobs:
           for old, new in replacements.items():
               text = text.replace(old, new)
 
-          old_function = '''def _goto_page_with_ready_dom(page: object, url: str) -> None:
+          old_navigation = '''def _goto_page_with_ready_dom(page: object, url: str) -> None:
               last_error: Exception | None = None
               for wait_until in ("domcontentloaded", "load"):
                   try:
@@ -79,7 +80,7 @@ jobs:
               if last_error is not None:
                   raise last_error
           '''
-          new_function = '''def _goto_page_with_ready_dom(page: object, url: str) -> None:
+          new_navigation = '''def _goto_page_with_ready_dom(page: object, url: str) -> None:
               try:
                   page.goto(url, wait_until="domcontentloaded", timeout=DEFAULT_TIMEOUT_SECONDS * 1000)
                   return
@@ -97,9 +98,85 @@ jobs:
               normalized = content.strip().lower()
               return "<body" in normalized or "/products/" in normalized or "線上庫存" in content
           '''
-          if old_function not in text:
-              raise SystemExit("Navigation function patch target not found")
-          text = text.replace(old_function, new_function)
+          if old_navigation in text:
+              text = text.replace(old_navigation, new_navigation)
+
+          category_function_pattern = re.compile(
+              r"def _fetch_category_products_with_page\(page: object, category_url: str\) -> list\[CategoryProduct\]:.*?(?=\n\ndef fetch_product_detail_with_page)",
+              re.S,
+          )
+          hardened_category_function = r'''def _fetch_category_products_with_page(page: object, category_url: str) -> list[CategoryProduct]:
+              _goto_page_with_ready_dom(page, category_url)
+              _wait_for_category_product_links(page)
+              items = page.locator('a[href*="/products/"]').evaluate_all(
+                  r"""
+                  (nodes) => {
+                    const seen = new Map();
+                    for (const node of nodes) {
+                      const href = new URL(node.getAttribute('href'), window.location.origin).toString();
+                      const card = node.closest('[class*="product"], [data-product-id], [data-id], li, .thumbnail') || node.parentElement || node;
+                      const candidates = [
+                        node.getAttribute('title'),
+                        node.textContent,
+                        node.querySelector('img')?.getAttribute('alt'),
+                        card.textContent,
+                      ]
+                        .map((value) => (value || '').replace(/\s+/g, ' ').trim())
+                        .filter(Boolean);
+                      const name = candidates.sort((a, b) => b.length - a.length)[0] || href.split('/').pop();
+                      const stockText = (card.textContent || '').replace(/\s+/g, ' ').trim();
+                      const dataset = Object.assign({}, card.dataset || {}, node.dataset || {});
+                      const catalogId = Object.values(dataset).find((value) => /^\d+$/.test(String(value || ''))) || '';
+                      if (!seen.has(href) || seen.get(href).name.length < name.length) {
+                        let stockStatus = 'unknown';
+                        if (/商品已售完|售完待補貨|庫存不足|已售完|缺貨/.test(stockText)) {
+                          stockStatus = 'sold_out';
+                        } else if (/加入購物車|尚有庫存|可購買/.test(stockText)) {
+                          stockStatus = 'in_stock';
+                        }
+                        seen.set(href, { product_url: href, catalog_id: String(catalogId), name, stock_status: stockStatus });
+                      }
+                    }
+                    return Array.from(seen.values());
+                  }
+                  """
+              )
+              html = page.content()
+
+              products = [CategoryProduct(**item) for item in items]
+              catalog_ids = _extract_catalog_ids_from_category_html(html)
+              if products and catalog_ids:
+                  missing_ids = all(not product.catalog_id for product in products)
+                  if missing_ids and len(catalog_ids) >= len(products):
+                      products = [
+                          replace(product, catalog_id=catalog_ids[index])
+                          for index, product in enumerate(products)
+                      ]
+              return products
+
+
+          def _wait_for_category_product_links(page: object) -> None:
+              selector = 'a[href*="/products/"]'
+              for attempt in range(5):
+                  try:
+                      if page.locator(selector).count() > 0:
+                          return
+                  except Exception:
+                      pass
+                  try:
+                      page.wait_for_selector(selector, timeout=5_000)
+                      return
+                  except Exception:
+                      pass
+                  try:
+                      page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                  except Exception:
+                      pass
+                  page.wait_for_timeout(1_000 + attempt * 500)
+          '''
+          text, replacements_count = category_function_pattern.subn(hardened_category_function, text, count=1)
+          if replacements_count != 1:
+              raise SystemExit("Category function patch target not found")
 
           path.write_text(text, encoding="utf-8")
           PY
