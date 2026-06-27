@@ -105,7 +105,7 @@ jobs:
               r"def _fetch_category_products_with_page\(page: object, category_url: str\) -> list\[CategoryProduct\]:.*?(?=\n\ndef fetch_product_detail_with_page)",
               re.S,
           )
-          hardened_category_function = r'''def _fetch_category_products_with_page(page: object, category_url: str) -> list[CategoryProduct]:
+          hardened_category_function = '''def _fetch_category_products_with_page(page: object, category_url: str) -> list[CategoryProduct]:
               _goto_page_with_ready_dom(page, category_url)
               _wait_for_category_product_links(page)
               items = page.locator('a[href*="/products/"]').evaluate_all(
@@ -121,12 +121,12 @@ jobs:
                         node.querySelector('img')?.getAttribute('alt'),
                         card.textContent,
                       ]
-                        .map((value) => (value || '').replace(/\s+/g, ' ').trim())
+                        .map((value) => (value || '').replace(/\\s+/g, ' ').trim())
                         .filter(Boolean);
                       const name = candidates.sort((a, b) => b.length - a.length)[0] || href.split('/').pop();
-                      const stockText = (card.textContent || '').replace(/\s+/g, ' ').trim();
+                      const stockText = (card.textContent || '').replace(/\\s+/g, ' ').trim();
                       const dataset = Object.assign({}, card.dataset || {}, node.dataset || {});
-                      const catalogId = Object.values(dataset).find((value) => /^\d+$/.test(String(value || ''))) || '';
+                      const catalogId = Object.values(dataset).find((value) => /^\\d+$/.test(String(value || ''))) || '';
                       if (!seen.has(href) || seen.get(href).name.length < name.length) {
                         let stockStatus = 'unknown';
                         if (/商品已售完|售完待補貨|庫存不足|已售完|缺貨/.test(stockText)) {
