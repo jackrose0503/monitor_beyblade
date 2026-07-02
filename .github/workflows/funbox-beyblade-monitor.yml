@@ -81,13 +81,22 @@ jobs:
                   raise last_error
           '''
           new_navigation = '''def _goto_page_with_ready_dom(page: object, url: str) -> None:
-              try:
-                  page.goto(url, wait_until="domcontentloaded", timeout=DEFAULT_TIMEOUT_SECONDS * 1000)
-                  return
-              except Exception as exc:
-                  if _page_has_loaded_content(page):
+              first_error: Exception | None = None
+              for wait_until, timeout_ms in (("commit", 15_000), ("domcontentloaded", DEFAULT_TIMEOUT_SECONDS * 1000)):
+                  try:
+                      page.goto(url, wait_until=wait_until, timeout=timeout_ms)
                       return
-                  raise exc
+                  except Exception as exc:
+                      if first_error is None:
+                          first_error = exc
+                      try:
+                          page.wait_for_timeout(2_000)
+                      except Exception:
+                          pass
+                      if _page_has_loaded_content(page):
+                          return
+              if first_error is not None:
+                  raise first_error
 
 
           def _page_has_loaded_content(page: object) -> bool:
