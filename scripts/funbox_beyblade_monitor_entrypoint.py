@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import re
+import sys
 from dataclasses import replace
+from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scripts import funbox_beyblade_monitor as monitor
 
 
