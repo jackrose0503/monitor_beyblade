@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 import unittest
+from pathlib import Path
 
 from scripts import funbox_beyblade_monitor as monitor
 from scripts import funbox_beyblade_monitor_entrypoint as entrypoint
@@ -76,6 +79,23 @@ class CategoryPageStub:
 
 
 class EntrypointPatchTests(unittest.TestCase):
+    def test_entrypoint_can_be_executed_by_script_path(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        result = subprocess.run(
+            [
+                sys.executable,
+                "scripts/funbox_beyblade_monitor_entrypoint.py",
+                "--help",
+            ],
+            cwd=repo_root,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("--send-status-report", result.stdout)
+
     def test_diff_products_uses_catalog_id_not_product_url(self) -> None:
         previous = [
             make_snapshot(
