@@ -154,6 +154,8 @@ jobs:
 
               products = [CategoryProduct(**item) for item in items]
               catalog_ids = _extract_catalog_ids_from_category_html(html)
+              if not products and catalog_ids:
+                  products = _build_category_products_from_catalog_ids(category_url, catalog_ids)
               if products and catalog_ids:
                   missing_ids = all(not product.catalog_id for product in products)
                   if missing_ids and len(catalog_ids) >= len(products):
@@ -182,6 +184,19 @@ jobs:
                   except Exception:
                       pass
                   page.wait_for_timeout(1_000 + attempt * 500)
+
+
+          def _build_category_products_from_catalog_ids(category_url: str, catalog_ids: list[str]) -> list[CategoryProduct]:
+              base_url = category_url.split("/categories/", 1)[0]
+              return [
+                  CategoryProduct(
+                      product_url=f"{base_url}/products/{catalog_id}",
+                      catalog_id=catalog_id,
+                      name=catalog_id,
+                      stock_status="unknown",
+                  )
+                  for catalog_id in catalog_ids
+              ]
           '''
           text, replacements_count = category_function_pattern.subn(
               lambda _match: hardened_category_function,
